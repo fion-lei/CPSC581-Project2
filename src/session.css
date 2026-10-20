@@ -1,0 +1,22 @@
+.net-chip { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; max-width: calc(100% - 90px); display: flex; align-items: center; gap: 8px; padding: 10px 14px; min-height: 44px; border: 1px solid #ffffff35; border-radius: 24px; background: #111e; color: white; font: 600 12px system-ui, sans-serif; pointer-events: auto; cursor: pointer; z-index: 5; }
+.net-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #929ba5; }
+.net-chip[data-state="connecting"] .net-dot { background: #fbbf24; }
+.net-chip[data-state="connected"] .net-dot { background: #4ade80; }
+#hud:has(> pre:not([hidden])) .net-chip { top: 155px; }
+.net-start { position: absolute; inset: 0; display: grid; place-items: center; box-sizing: border-box; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); background: #070a0dbb; overflow-y: auto; pointer-events: auto; z-index: 10; }
+.net-start[hidden], .net-start [hidden] { display: none !important; }
+.net-card { box-sizing: border-box; width: min(100%, 370px); max-height: 100%; overflow-y: auto; border: 1px solid #ffffff30; border-radius: 20px; padding: 24px; background: #181b20; color: #fff; box-shadow: 0 16px 70px #0006; font-family: system-ui, sans-serif; }
+.net-eyebrow { font-size: 10px; letter-spacing: 2px; color: #fdba74; }
+.net-card h1 { font-size: 22px; line-height: 1.2; margin: 10px 0; }
+.net-card p { color: #bdc3cd; font-size: 13px; line-height: 1.5; margin: 10px 0 16px; }
+.net-card label { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; color: #d6dbe2; font-size: 12px; }
+.net-card input, .net-card select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #626b78; border-radius: 9px; background: #101216; color: #fff; font: 16px system-ui, sans-serif; }
+.net-card input { text-transform: uppercase; letter-spacing: 2px; }
+.net-card button { border: 0; border-radius: 10px; min-height: 42px; padding: 10px 12px; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.net-card .net-primary { display: block; width: 100%; margin-top: 12px; background: #ea580c; color: white; }
+.net-card .net-quiet { background: transparent; color: #d2d7df; }
+.net-card #net-generate { display: block; margin: 4px 0 0 auto; font-size: 11px; min-height: 32px; }
+.net-card #net-message { min-height: 20px; font-size: 12px; margin-bottom: 4px; }
+.net-actions { display: flex; justify-content: space-between; gap: 8px; }
+.net-card button:hover, .net-chip:hover { filter: brightness(1.15); }
+.net-card :focus-visible, .net-chip:focus-visible { outline: 2px solid #fdba74; outline-offset: 3px; }

@@ -1,143 +1,253 @@
-const ROLE_COLORS = { expert: "#EA580C", novice: "#1D4ED8" };
-const STATUS_COLORS = { connecting: "#F59E0B", connected: "#22C55E", disconnected: "#EF4444" };
+import "./session.css";
+
 const STORE_KEY = "ghostlens.join";
+const validRole = (role) => role === "expert" || role === "novice";
+const validCode = (code) =>
+  typeof code === "string" && /^\d{4}$/.test(code);
+const randomCode = () =>
+  String(Math.floor(Math.random() * 10000)).padStart(4, "0");
 
-let chip = null;
-let chipDot = null;
-let chipText = null;
-let joined = null; // { role, code }
-
-const label = (role) => role[0].toUpperCase() + role.slice(1);
-const validCode = (code) => /^\d{4}$/.test(code);
-const randomCode = () => String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+let joined = null;
+let view = null;
 
 function loadLast() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) ?? {}; } catch { return {}; }
-}
-
-function saveLast(role, code) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ role, code })); } catch { /* private mode */ }
-}
-
-function makeChip(hud) {
-  chip = document.createElement("div");
-  Object.assign(chip.style, {
-    position: "absolute", left: "50%", top: "16px", transform: "translateX(-50%)",
-    display: "flex", alignItems: "center", gap: "8px", width: "max-content",
-    maxWidth: "calc(100% - 136px)", boxSizing: "border-box", padding: "8px 14px",
-    borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)", color: "#fff",
-    font: "13px system-ui, sans-serif", whiteSpace: "nowrap", overflow: "hidden",
-  });
-  chipDot = document.createElement("span");
-  Object.assign(chipDot.style, { width: "8px", height: "8px", borderRadius: "4px", flex: "none" });
-  chipText = document.createElement("span");
-  Object.assign(chipText.style, { overflow: "hidden", textOverflow: "ellipsis" });
-  chip.append(chipDot, chipText);
-  chip.hidden = true;
-  hud.appendChild(chip);
-}
-
-// Full-screen role + room code picker. Covers the AR button until joined.
-function makeStartScreen(hud, onJoin) {
-  const last = loadLast();
-  let role = last.role;
-
-  const screen = document.createElement("div");
-  Object.assign(screen.style, {
-    position: "absolute", inset: "0", zIndex: "1000", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: "16px", padding: "16px",
-    background: "#111", pointerEvents: "auto", font: "16px system-ui, sans-serif",
-  });
-
-  const title = document.createElement("h1");
-  title.textContent = "Ghost Lens";
-  Object.assign(title.style, { margin: "0 0 8px", font: "700 28px system-ui, sans-serif" });
-
-  const roles = document.createElement("div");
-  Object.assign(roles.style, { display: "flex", gap: "12px", width: "100%", maxWidth: "320px" });
-
-  const input = document.createElement("input");
-  Object.assign(input, { inputMode: "numeric", maxLength: 4, placeholder: "Room code",
-    autocomplete: "off", value: last.code ?? "" });
-  Object.assign(input.style, {
-    width: "100%", maxWidth: "320px", boxSizing: "border-box", minHeight: "56px",
-    border: "2px solid #444", borderRadius: "16px", background: "#1b1b1b", color: "#fff",
-    font: "600 24px ui-monospace, monospace", textAlign: "center", letterSpacing: "8px",
-  });
-
-  const join = document.createElement("button");
-  join.textContent = "Join";
-  Object.assign(join.style, {
-    width: "100%", maxWidth: "320px", minHeight: "56px", border: "none", borderRadius: "28px",
-    color: "#fff", font: "600 18px system-ui, sans-serif",
-  });
-
-  const roleButtons = {};
-  for (const r of ["expert", "novice"]) {
-    const b = document.createElement("button");
-    b.textContent = label(r);
-    Object.assign(b.style, {
-      flex: "1", minHeight: "72px", borderRadius: "16px", color: "#fff",
-      font: "600 18px system-ui, sans-serif",
-    });
-    b.addEventListener("click", () => {
-      role = r;
-      // The expert opens the room, so they get a fresh code to read out
-      if (r === "expert" && !validCode(input.value)) input.value = randomCode();
-      refresh();
-    });
-    roleButtons[r] = b;
-    roles.appendChild(b);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
   }
-
-  function refresh() {
-    for (const [r, b] of Object.entries(roleButtons)) {
-      const on = r === role;
-      b.style.border = `2px solid ${ROLE_COLORS[r]}`;
-      b.style.background = on ? ROLE_COLORS[r] : "transparent";
-    }
-    input.value = input.value.replace(/\D/g, "").slice(0, 4);
-    const ready = !!role && validCode(input.value);
-    join.disabled = !ready;
-    join.style.background = ready ? ROLE_COLORS[role] : "#333";
-    join.style.opacity = ready ? "1" : "0.6";
-  }
-
-  input.addEventListener("input", refresh);
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !join.disabled) join.click(); });
-  join.addEventListener("click", () => {
-    saveLast(role, input.value);
-    screen.remove();
-    start(role, input.value, onJoin);
-  });
-
-  screen.append(title, roles, input, join);
-  hud.appendChild(screen);
-  refresh();
 }
 
-function start(role, code, onJoin) {
-  joined = { role, code };
-  chip.hidden = false;
-  onJoin(role, code);
-}
-
-// Start screen, then onJoin(role, code). ?role=expert&room=1234 skips the screen.
-export function initHud(onJoin) {
-  const hud = document.getElementById("hud");
-  makeChip(hud);
-
-  const params = new URLSearchParams(location.search);
-  const role = params.get("role");
-  const code = params.get("room") ?? "";
-  if ((role === "expert" || role === "novice") && validCode(code)) start(role, code, onJoin);
-  else makeStartScreen(hud, onJoin);
-}
-
-// Connection status chip: "Expert · 1234 · connected", or the detail in place of the
-// state ("Novice · 1234 · waiting for expert"); the dot colour shows the state
 export function setStatus(state, detail = "") {
-  if (!joined) return;
-  chipDot.style.background = STATUS_COLORS[state];
-  chipText.textContent = [label(joined.role), joined.code, detail || state].join(" · ");
+  if (!view) return;
+
+  const name = state[0].toUpperCase() + state.slice(1);
+  view.chip.dataset.state = state;
+  view.dot.style.background = {
+    connecting: "#fbbf24",
+    connected: "#4ade80",
+    disconnected: "#929ba5",
+  }[state] || "#929ba5";
+
+  const prefix = joined
+    ? (joined.role === "expert" ? "Expert" : "Novice") +
+      " · " + joined.code + " · "
+    : "";
+
+  view.text.textContent =
+    prefix + name + (detail ? " · " + detail : "");
+  view.chip.title = detail || name;
+  view.message.textContent = detail || name;
+}
+
+export function initHud(onJoin) {
+  if (view) return;
+
+  const hud = document.getElementById("hud");
+
+  const chip = document.createElement("button");
+  chip.id = "net-chip";
+  chip.className = "net-chip";
+  chip.type = "button";
+  chip.setAttribute("aria-label", "Open connection settings");
+  chip.setAttribute("aria-controls", "net-start");
+  chip.setAttribute("aria-expanded", "true");
+
+  const dot = document.createElement("span");
+  dot.className = "net-dot";
+
+  const text = document.createElement("span");
+  text.setAttribute("role", "status");
+  chip.append(dot, text);
+
+  const screen = document.createElement("section");
+  screen.id = "net-start";
+  screen.className = "net-start";
+  screen.style.zIndex = "1000";
+  screen.setAttribute("aria-label", "Shared session setup");
+
+  screen.innerHTML = `
+    <form class="net-card" novalidate>
+      <span class="net-eyebrow">GHOST LENS</span>
+      <h1>Join a shared session</h1>
+      <p>The expert creates a room. The novice joins with the same code.</p>
+
+      <label>Your role
+        <select id="net-role">
+          <option value="expert">Expert</option>
+          <option value="novice">Novice</option>
+        </select>
+      </label>
+
+      <label>Room code
+        <input id="net-code" type="text" inputmode="numeric"
+          maxlength="4" placeholder="e.g. 1234" autocomplete="off"
+          aria-describedby="net-message">
+      </label>
+
+      <button type="button" id="net-generate" class="net-quiet">
+        Generate a code
+      </button>
+      <button type="submit" id="net-submit" class="net-primary">
+        Create room
+      </button>
+
+      <p id="net-message" role="status"></p>
+
+      <div class="net-actions">
+        <button type="button" id="net-preview" class="net-quiet">
+          Local preview
+        </button>
+        <button type="button" id="net-disconnect" class="net-quiet" hidden>
+          Disconnect &amp; reload
+        </button>
+      </div>
+    </form>`;
+
+  hud.append(chip, screen);
+
+  const find = (name) => screen.querySelector("#net-" + name);
+  const form = screen.querySelector("form");
+  const role = find("role");
+  const code = find("code");
+  const submit = find("submit");
+  const generate = find("generate");
+  const message = find("message");
+  const preview = find("preview");
+  const leave = find("disconnect");
+
+  view = { chip, dot, text, message };
+
+  const saved = loadLast();
+  const params = new URLSearchParams(location.search);
+  const linkRole = params.get("role");
+  const linkCode = params.get("room") ?? params.get("code") ?? "";
+
+  role.value = validRole(linkRole)
+    ? linkRole
+    : validRole(saved.role) ? saved.role : "expert";
+  code.value = linkCode || (validCode(saved.code) ? saved.code : "");
+
+  function refreshControls() {
+    role.disabled = !!joined;
+    code.disabled = !!joined;
+    generate.hidden = !!joined || role.value !== "expert";
+    leave.hidden = !joined;
+    preview.textContent = joined ? "Back to scene" : "Local preview";
+    submit.textContent = joined
+      ? "Back to scene"
+      : role.value === "expert" ? "Create room" : "Join room";
+  }
+
+  function closeScreen() {
+    screen.hidden = true;
+    chip.setAttribute("aria-expanded", "false");
+    chip.focus();
+  }
+
+  function joinRoom() {
+    if (joined) {
+      closeScreen();
+      return;
+    }
+
+    if (!validRole(role.value)) {
+      message.textContent = "Choose Expert or Novice.";
+      role.focus();
+      return;
+    }
+
+    code.value = code.value.trim();
+
+    if (role.value === "expert" && !code.value) {
+      code.value = randomCode();
+    }
+
+    if (!validCode(code.value)) {
+      message.textContent = "Enter exactly four digits, such as 1234.";
+      code.focus();
+      return;
+    }
+
+    // connect() can report a status immediately.
+    joined = { role: role.value, code: code.value };
+
+    try {
+      onJoin(joined.role, joined.code);
+    } catch (error) {
+      joined = null;
+      setStatus(
+        "disconnected",
+        error.message || "Could not start the connection."
+      );
+      refreshControls();
+      return;
+    }
+
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(joined));
+    } catch {
+      // Joining still works if browser storage is unavailable.
+    }
+
+    refreshControls();
+    closeScreen();
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    joinRoom();
+  });
+
+  role.addEventListener("change", refreshControls);
+
+  generate.addEventListener("click", () => {
+    code.value = randomCode();
+  });
+
+  code.addEventListener("input", () => {
+    code.value = code.value.replace(/\D/g, "").slice(0, 4);
+  });
+
+  chip.addEventListener("click", () => {
+    screen.hidden = false;
+    chip.setAttribute("aria-expanded", "true");
+    (joined ? preview : code).focus();
+  });
+
+  preview.addEventListener("click", closeScreen);
+
+  // Existing net.js destroys its peer on beforeunload.
+  // Clear auto-join parameters so reload shows the start screen.
+  leave.addEventListener("click", () => {
+    const url = new URL(location.href);
+
+    for (const key of ["role", "room", "code"]) {
+      url.searchParams.delete(key);
+    }
+
+    history.replaceState(null, "", url);
+    location.reload();
+  });
+
+  // Keep form keystrokes away from scene shortcuts.
+  screen.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+  });
+
+  // HUD interaction must not also select objects in AR.
+  for (const element of [chip, screen]) {
+    element.addEventListener("beforexrselect", (event) => {
+      event.preventDefault();
+    });
+  }
+
+  refreshControls();
+  setStatus("disconnected", "Choose a role and room");
+
+  // Preserve direct links such as ?role=novice&room=1234.
+  if (validRole(linkRole) && validCode(linkCode)) {
+    joinRoom();
+  }
 }
