@@ -18,6 +18,5 @@ https://fion-lei.github.io/CPSC581-Project2/
 ## Devices
 - Android + Chrome: full support (AR, vibration)
 - iPhone: open
-  `https://appclip.needle.tools/ar?url=https%3A%2F%2Ffion-lei.github.io%2FCPSC581-Project2%2F`
-  in Safari
-  (AR without vibration)
+  https://appclip.needle.tools/ar?url=https%3A%2F%2Ffion-lei.github.io%2FCPSC581-Project2%2F
+  in Safari (AR without vibration)
