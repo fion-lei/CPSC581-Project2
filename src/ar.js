@@ -20,6 +20,7 @@ scene.add(reticle);
 let hitTestSource = null;
 let hitTestFailed = false;
 let placing = false;
+let tracking = false;
 let placeButton = null;
 let replaceButton = null;
 let status = null;
@@ -49,7 +50,11 @@ function place() {
   placing = false;
 }
 
+// False on frames where the device has lost tracking; the XR camera then holds a stale pose
+export function isTracking() { return tracking; }
+
 export function updateAR(frame) {
+  tracking = !!frame.getViewerPose(renderer.xr.getReferenceSpace());
   if (placing && hitTestSource) {
     const hits = frame.getHitTestResults(hitTestSource);
     const pose = hits[0]?.getPose(renderer.xr.getReferenceSpace());
@@ -140,6 +145,7 @@ export function initAR() {
     hitTestFailed = false;
     status.hidden = true;
     placing = false;
+    tracking = false;
     reticle.visible = false;
     placeButton.hidden = true;
     replaceButton.hidden = true;
