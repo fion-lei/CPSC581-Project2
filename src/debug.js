@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { getLocalPose } from "./pose.js";
 import { isPlaced } from "./ar.js";
 import { renderer } from "./scene.js";
+import { getStatus, getRemoteRole } from "./net.js";
 
 const UPDATE_MS = 100; // ~10 Hz keeps the numbers readable
 
@@ -22,7 +23,7 @@ export function initDebug() {
 
   panel = document.createElement("pre");
   Object.assign(panel.style, {
-    position: "absolute", left: "16px", top: "16px", margin: "0", padding: "8px 12px",
+    position: "absolute", left: "16px", top: "68px", margin: "0", padding: "8px 12px",
     borderRadius: "12px", background: "rgba(17, 17, 17, 0.7)", color: "#fff",
     font: "12px ui-monospace, monospace", pointerEvents: "none",
   });
@@ -44,7 +45,7 @@ export function initDebug() {
 
   // Desktop toggle
   window.addEventListener("keydown", (e) => {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target instanceof HTMLInputElement) return;
     if (e.key === "d" || e.key === "D") setVisible(!visible);
   });
 }
@@ -60,10 +61,11 @@ export function updateDebug() {
   const xrLine = session
     ? `\nblend ${session.environmentBlendMode}  overlay ${session.domOverlayState?.type ?? "none"}`
     : "";
+  const netLine = `\nnet  ${getStatus()}  peer ${getRemoteRole() ?? "—"}`;
 
   const pose = getLocalPose();
   if (!pose) {
-    panel.textContent = (isPlaced() ? "local pose: tracking lost" : "local pose: not placed") + xrLine;
+    panel.textContent = (isPlaced() ? "local pose: tracking lost" : "local pose: not placed") + netLine + xrLine;
     return;
   }
   const { p, q } = pose;
@@ -76,5 +78,5 @@ export function updateDebug() {
     `p    ${p.map(f).join(" ")}\n` +
     `q    ${q.map(f).join(" ")}\n` +
     `dist ${dist.toFixed(1)} cm\n` +
-    `yaw  ${yaw.toFixed(0)}°  pitch ${pitch.toFixed(0)}°` + xrLine;
+    `yaw  ${yaw.toFixed(0)}°  pitch ${pitch.toFixed(0)}°` + netLine + xrLine;
 }
