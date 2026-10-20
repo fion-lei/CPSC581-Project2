@@ -4,6 +4,8 @@ import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
+import { connect, on, onStatus } from "./net.js";
+import { initHud, setStatus } from "./hud.js";
 
 scene.add(modelRoot);
 
@@ -18,6 +20,11 @@ controls.update();
 
 initAR();
 initDebug();
+
+onStatus(setStatus);
+on("hello", (msg) => console.log(`hello from ${msg.role}`));
+initHud(connect);
+
 onSessionStart(() => {
   grid.visible = false;
   controls.enabled = false;
