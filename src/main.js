@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR } from "./ar.js";
+import { initDebug, updateDebug } from "./debug.js";
 
 scene.add(modelRoot);
 
@@ -16,6 +17,7 @@ controls.enableDamping = true;
 controls.update();
 
 initAR();
+initDebug();
 onSessionStart(() => {
   grid.visible = false;
   controls.enabled = false;
@@ -28,4 +30,5 @@ onSessionEnd(() => {
 startLoop((_time, frame) => {
   if (renderer.xr.isPresenting) updateAR(frame);
   else controls.update();
+  updateDebug();
 });
