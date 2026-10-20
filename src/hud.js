@@ -1,11 +1,23 @@
-const ROLE_COLORS = { expert: "#EA580C", novice: "#1D4ED8" };
-const STATUS_COLORS = { connecting: "#F59E0B", connected: "#22C55E", disconnected: "#EF4444" };
-const STORE_KEY = "ghostlens.join";
+import { ROOM_IN_USE } from "./net.js";
 
+const STORE_KEY = "ghostlens.join";
+const TITLES = { expert: "Start a session", novice: "Join a session" };
+
+let net = null;     // { connect, disconnect }
+let joined = null;  // { role, code } once in a room
+let state = "disconnected";
+let detail = "";
+let peerRole = null;
+
+// Role chip, top-left after the start screen
 let chip = null;
 let chipDot = null;
 let chipText = null;
-let joined = null; // { role, code }
+// Start screen status chip and Enter AR button, or null once it's gone
+let screenStatus = null;
+let enterButton = null;
+// Start screen: gives the expert a fresh code when theirs is taken, or null
+let onRoomInUse = null;
 
 const label = (role) => role[0].toUpperCase() + role.slice(1);
 const validCode = (code) => /^\d{4}$/.test(code);
@@ -19,125 +31,175 @@ function saveLast(role, code) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ role, code })); } catch { /* private mode */ }
 }
 
-function makeChip(hud) {
-  chip = document.createElement("div");
-  Object.assign(chip.style, {
-    position: "absolute", left: "50%", top: "16px", transform: "translateX(-50%)",
-    display: "flex", alignItems: "center", gap: "8px", width: "max-content",
-    maxWidth: "calc(100% - 136px)", boxSizing: "border-box", padding: "8px 14px",
-    borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)", color: "#fff",
-    font: "13px system-ui, sans-serif", whiteSpace: "nowrap", overflow: "hidden",
-  });
-  chipDot = document.createElement("span");
-  Object.assign(chipDot.style, { width: "8px", height: "8px", borderRadius: "4px", flex: "none" });
-  chipText = document.createElement("span");
-  Object.assign(chipText.style, { overflow: "hidden", textOverflow: "ellipsis" });
-  chip.append(chipDot, chipText);
-  chip.hidden = true;
-  hud.appendChild(chip);
+function el(tag, className, text) {
+  const e = document.createElement(tag);
+  e.className = className;
+  if (text) e.textContent = text;
+  return e;
 }
 
-// Full-screen role + room code picker. Covers the AR button until joined.
-function makeStartScreen(hud, onJoin) {
+function makeStatusChip(className) {
+  const c = el("div", `chip ${className}`);
+  const dot = el("span", "chip-dot");
+  const text = el("span", "chip-text");
+  c.append(dot, text);
+  return { c, dot, text };
+}
+
+// Join (or switch to) a room; null leaves the current one
+function join(role, code) {
+  if (joined && role && joined.role === role && joined.code === code) return;
+  if (joined) net.disconnect();
+  joined = role ? { role, code } : null;
+  peerRole = null;
+  if (joined) net.connect(role, code);
+  render();
+}
+
+function render() {
+  if (chip && joined) {
+    chipDot.className = `chip-dot is-${state}`;
+    chipText.textContent = [label(joined.role), joined.code, detail || state].join(" · ");
+  }
+  if (!screenStatus) return;
+
+  // "Connected · expert", or "Waiting for novice…" while connecting
+  screenStatus.c.hidden = !joined;
+  screenStatus.dot.className = `chip-dot is-${state}`;
+  screenStatus.text.textContent = state === "connected"
+    ? ["Connected", peerRole].filter(Boolean).join(" · ")
+    : (detail || state) + (state === "connecting" || state === "waiting" ? "…" : "");
+
+  // The expert can go in once the room is open and wait there for the novice;
+  // the novice needs the expert connected first
+  const ready = state === "connected" || (state === "waiting" && joined?.role === "expert");
+  enterButton.disabled = !ready;
+  enterButton.classList.toggle("is-expert", ready && joined.role === "expert");
+  enterButton.classList.toggle("is-novice", ready && joined.role === "novice");
+}
+
+// Full-screen role + room code picker. Joins the room right away. Enter AR unlocks for
+// the expert once their room is open, for the novice once connected to the expert.
+// Covers the AR button until then.
+function makeStartScreen(hud, onEnter, arSupported) {
   const last = loadLast();
-  let role = last.role;
+  // The expert opens the room; keep their last code so a reload rejoins it
+  let expertCode = last.role === "expert" && validCode(last.code) ? last.code : randomCode();
 
-  const screen = document.createElement("div");
-  Object.assign(screen.style, {
-    position: "absolute", inset: "0", zIndex: "1000", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: "16px", padding: "16px",
-    background: "#111", pointerEvents: "auto", font: "16px system-ui, sans-serif",
-  });
+  const screen = el("div", "start-screen");
+  const top = el("div", "start-top");
+  const bottom = el("div", "start-bottom");
 
-  const title = document.createElement("h1");
-  title.textContent = "Ghost Lens";
-  Object.assign(title.style, { margin: "0 0 8px", font: "700 28px system-ui, sans-serif" });
+  const title = el("h1", "start-title", "Start or join a session");
+  const segmented = el("div", "segmented");
+  const codeField = el("div", "start-field");
+  const codeLabel = el("div", "field-label");
 
-  const roles = document.createElement("div");
-  Object.assign(roles.style, { display: "flex", gap: "12px", width: "100%", maxWidth: "320px" });
+  // Expert: the code, read-only, one box per digit
+  const digits = el("div", "code-digits");
+  const help = el("p", "start-help", "Read this code to the novice over the call");
+  // Novice: type it in
+  const input = el("input", "code-input");
+  Object.assign(input, { inputMode: "numeric", maxLength: 4, placeholder: "0000",
+    autocomplete: "off", ariaLabel: "Room code" });
 
-  const input = document.createElement("input");
-  Object.assign(input, { inputMode: "numeric", maxLength: 4, placeholder: "Room code",
-    autocomplete: "off", value: last.code ?? "" });
-  Object.assign(input.style, {
-    width: "100%", maxWidth: "320px", boxSizing: "border-box", minHeight: "56px",
-    border: "2px solid #444", borderRadius: "16px", background: "#1b1b1b", color: "#fff",
-    font: "600 24px ui-monospace, monospace", textAlign: "center", letterSpacing: "8px",
-  });
-
-  const join = document.createElement("button");
-  join.textContent = "Join";
-  Object.assign(join.style, {
-    width: "100%", maxWidth: "320px", minHeight: "56px", border: "none", borderRadius: "28px",
-    color: "#fff", font: "600 18px system-ui, sans-serif",
-  });
+  codeField.append(codeLabel, digits, help, input);
+  codeField.hidden = true;
 
   const roleButtons = {};
   for (const r of ["expert", "novice"]) {
-    const b = document.createElement("button");
-    b.textContent = label(r);
-    Object.assign(b.style, {
-      flex: "1", minHeight: "72px", borderRadius: "16px", color: "#fff",
-      font: "600 18px system-ui, sans-serif",
-    });
-    b.addEventListener("click", () => {
-      role = r;
-      // The expert opens the room, so they get a fresh code to read out
-      if (r === "expert" && !validCode(input.value)) input.value = randomCode();
-      refresh();
-    });
+    const b = el("button", "segment", label(r));
+    b.addEventListener("click", () => pick(r));
     roleButtons[r] = b;
-    roles.appendChild(b);
+    segmented.appendChild(b);
   }
 
-  function refresh() {
-    for (const [r, b] of Object.entries(roleButtons)) {
-      const on = r === role;
-      b.style.border = `2px solid ${ROLE_COLORS[r]}`;
-      b.style.background = on ? ROLE_COLORS[r] : "transparent";
+  function pick(role) {
+    for (const [r, b] of Object.entries(roleButtons)) b.classList.toggle(`is-${r}`, r === role);
+    title.textContent = TITLES[role];
+    codeField.hidden = false;
+    codeLabel.textContent = role === "expert" ? "Room code" : "Enter room code";
+    digits.hidden = help.hidden = role !== "expert";
+    input.hidden = role !== "novice";
+
+    if (role === "expert") {
+      digits.replaceChildren(...[...expertCode].map((d) => el("span", "code-digit", d)));
+      join("expert", expertCode);
+    } else {
+      if (!input.value && last.role === "novice" && validCode(last.code)) input.value = last.code;
+      typed();
+      input.focus();
     }
-    input.value = input.value.replace(/\D/g, "").slice(0, 4);
-    const ready = !!role && validCode(input.value);
-    join.disabled = !ready;
-    join.style.background = ready ? ROLE_COLORS[role] : "#333";
-    join.style.opacity = ready ? "1" : "0.6";
   }
 
-  input.addEventListener("input", refresh);
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !join.disabled) join.click(); });
-  join.addEventListener("click", () => {
-    saveLast(role, input.value);
+  function typed() {
+    input.value = input.value.replace(/\D/g, "").slice(0, 4);
+    join(validCode(input.value) ? "novice" : null, input.value);
+  }
+
+  // Someone else hosts this code (or a closed tab still holds it): switch to a new one
+  // rather than retry forever. The new code is shown before anyone has read it out.
+  onRoomInUse = () => {
+    const taken = expertCode;
+    while (expertCode === taken) expertCode = randomCode();
+    pick("expert");
+  };
+
+  input.addEventListener("input", typed);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !enterButton.disabled) enterButton.click(); });
+
+  screenStatus = makeStatusChip("start-status");
+  const enter = el("button", "btn start-enter", "Enter AR");
+  enterButton = enter;
+  // Desktop and phones without AR still get in, to the non-AR view
+  arSupported.then((ok) => { if (!ok) enter.textContent = "Continue without AR"; });
+  enter.addEventListener("click", () => {
+    saveLast(joined.role, joined.code);
     screen.remove();
-    start(role, input.value, onJoin);
+    screenStatus = enterButton = onRoomInUse = null;
+    chip.hidden = false;
+    render();
+    onEnter();
   });
 
-  screen.append(title, roles, input, join);
+  top.append(el("div", "field-label", "Ghost Lens"), title,
+    el("div", "field-label", "I am the"), segmented, codeField);
+  bottom.append(screenStatus.c, enterButton);
+  screen.append(top, bottom);
   hud.appendChild(screen);
-  refresh();
+  render();
 }
 
-function start(role, code, onJoin) {
-  joined = { role, code };
-  chip.hidden = false;
-  onJoin(role, code);
-}
-
-// Start screen, then onJoin(role, code). ?role=expert&room=1234 skips the screen.
-export function initHud(onJoin) {
+// Start screen, then onEnter() from its Enter AR button.
+// ?role=expert&room=1234 skips the screen and joins straight away.
+export function initHud({ connect, disconnect, onEnter, arSupported }) {
+  net = { connect, disconnect };
   const hud = document.getElementById("hud");
-  makeChip(hud);
+  ({ c: chip, dot: chipDot, text: chipText } = makeStatusChip("role-chip"));
+  chip.hidden = true;
+  hud.appendChild(chip);
 
   const params = new URLSearchParams(location.search);
   const role = params.get("role");
   const code = params.get("room") ?? "";
-  if ((role === "expert" || role === "novice") && validCode(code)) start(role, code, onJoin);
-  else makeStartScreen(hud, onJoin);
+  if ((role === "expert" || role === "novice") && validCode(code)) {
+    chip.hidden = false;
+    join(role, code);
+  } else makeStartScreen(hud, onEnter, arSupported);
 }
 
-// Connection status chip: "Expert · 1234 · connected", or the detail in place of the
-// state ("Novice · 1234 · waiting for expert"); the dot colour shows the state
-export function setStatus(state, detail = "") {
-  if (!joined) return;
-  chipDot.style.background = STATUS_COLORS[state];
-  chipText.textContent = [label(joined.role), joined.code, detail || state].join(" · ");
+// Connection state from net.js. Role chip: "EXPERT · 1234 · CONNECTED", or the
+// detail in place of the state ("NOVICE · 1234 · WAITING FOR EXPERT").
+export function setStatus(s, d = "") {
+  state = s;
+  detail = d;
+  if (s !== "connected") peerRole = null;
+  render();
+  if (d === ROOM_IN_USE && joined?.role === "expert") onRoomInUse?.();
+}
+
+// Role from the other phone's hello
+export function setPeerRole(role) {
+  peerRole = role;
+  render();
 }
