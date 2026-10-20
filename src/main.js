@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot } from "./model.js";
-import { initAR, onSessionStart, onSessionEnd } from "./ar.js";
+import { initAR, onSessionStart, onSessionEnd, updateAR } from "./ar.js";
 
 scene.add(modelRoot);
 
@@ -25,6 +25,7 @@ onSessionEnd(() => {
   controls.enabled = true;
 });
 
-startLoop(() => {
-  if (!renderer.xr.isPresenting) controls.update();
+startLoop((_time, frame) => {
+  if (renderer.xr.isPresenting) updateAR(frame);
+  else controls.update();
 });
