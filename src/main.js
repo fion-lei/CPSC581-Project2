@@ -8,12 +8,16 @@ import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
 import { initHud, setStatus, setPeerRole } from "./hud.js";
 import { getLocalPose } from "./pose.js";
-import { ghost, setGhostPose, updateGhost } from "./ghost.js";
+import { createGhost } from "./ghost.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 
 scene.add(modelRoot);
-modelRoot.add(ghost);
+
+// One ghost per role. Poses go to the other role's ghost, so this phone's own
+// ghost never gets any and stays hidden.
+const ghosts = { expert: createGhost("expert"), novice: createGhost("novice") };
+Object.values(ghosts).forEach((g) => modelRoot.add(g.object));
 
 // Desktop-only helpers
 const grid = new THREE.GridHelper(1, 20, 0x555555, 0x333333);
@@ -32,7 +36,7 @@ on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
 });
-on("pose", setGhostPose);
+on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {
@@ -44,8 +48,8 @@ onSessionEnd(() => {
   controls.enabled = true;
 });
 
-// Expert streams their phone pose, relative to the part. Nothing is sent while the
-// pose is unknown, so the novice's ghost times out and hides. Where AR works, only
+// Each phone streams its pose, relative to the part. Nothing is sent while the
+// pose is unknown, so the other phone's ghost times out and hides. Where AR works, only
 // the AR pose counts: outside a session the pose would be the desktop camera's.
 // Without AR (desktop testing) the orbit camera stands in for the phone.
 const round = (n) => Math.round(n * 1e4) / 1e4;
@@ -54,7 +58,7 @@ let hasAR = true;
 arSupported.then((ok) => { hasAR = ok; });
 function sendPose() {
   const time = performance.now();
-  if (getRole() !== "expert" || time - lastPoseSent < POSE_INTERVAL_MS) return;
+  if (!getRole() || time - lastPoseSent < POSE_INTERVAL_MS) return;
   if (hasAR && !renderer.xr.isPresenting) return;
   const pose = getLocalPose();
   if (!pose) return;
@@ -66,6 +70,7 @@ startLoop((_time, frame) => {
   if (renderer.xr.isPresenting) updateAR(frame);
   else controls.update();
   sendPose();
-  updateGhost();
+  ghosts.expert.update();
+  ghosts.novice.update();
   updateDebug();
 });
