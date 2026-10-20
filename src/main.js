@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot } from "./model.js";
+import { initAR, onSessionStart, onSessionEnd } from "./ar.js";
 
 scene.add(modelRoot);
 
@@ -14,4 +15,16 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
-startLoop(() => controls.update());
+initAR();
+onSessionStart(() => {
+  grid.visible = false;
+  controls.enabled = false;
+});
+onSessionEnd(() => {
+  grid.visible = true;
+  controls.enabled = true;
+});
+
+startLoop(() => {
+  if (!renderer.xr.isPresenting) controls.update();
+});
