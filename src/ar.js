@@ -112,6 +112,8 @@ export function initAR() {
   renderer.xr.addEventListener("sessionstart", () => {
     savedBackground = scene.background;
     scene.background = null;
+    // Nothing opaque may sit between the camera feed and the overlay
+    document.documentElement.style.background = document.body.style.background = "transparent";
 
     const session = renderer.xr.getSession();
     session.requestReferenceSpace("viewer")
@@ -138,6 +140,7 @@ export function initAR() {
   });
   renderer.xr.addEventListener("sessionend", () => {
     scene.background = savedBackground;
+    document.documentElement.style.background = document.body.style.background = "";
     hud.style.display = ""; // ARButton hides the overlay root on exit
 
     hitTestSource?.cancel();
