@@ -3,6 +3,9 @@ import { Peer } from "peerjs";
 const RETRY_MS = 2000;
 const OPEN_TIMEOUT_MS = 8000; // a connection that never opens (blocked WebRTC) is retried
 
+// Status detail when another peer already hosts the room
+export const ROOM_IN_USE = "room in use";
+
 const handlers = new Map();
 const statusHandlers = [];
 
@@ -20,7 +23,8 @@ export function on(type, fn) {
   handlers.get(type).push(fn);
 }
 
-// fn(state, detail): state is "connecting" | "connected" | "disconnected"
+// fn(state, detail): state is "connecting" | "waiting" | "connected" | "disconnected".
+// "waiting" = the expert's room is open but no novice has joined yet.
 export function onStatus(fn) { statusHandlers.push(fn); }
 
 // Messages are { t: "type", ...data }. Dropped while not connected.
@@ -85,7 +89,8 @@ function lost(c) {
   if (conn !== c) return;
   conn = null;
   remoteRole = null;
-  setStatus("disconnected", waitingText());
+  // The expert's room stays open for the novice to come back
+  setStatus(role === "expert" && peer?.open ? "waiting" : "disconnected", waitingText());
   if (role === "novice") retry(dial);
 }
 
@@ -99,31 +104,35 @@ function dial() {
 function start() {
   peer?.destroy();
   setStatus("connecting");
-  peer = role === "expert" ? new Peer(hostId) : new Peer();
+  const p = role === "expert" ? new Peer(hostId) : new Peer();
+  peer = p;
 
-  peer.on("open", () => {
+  // Events from a peer that has since been replaced or left are ignored
+  p.on("open", () => {
+    if (p !== peer) return;
     if (role === "novice") dial();
-    else if (!conn?.open) setStatus("connecting", waitingText());
+    else if (!conn?.open) setStatus("waiting", waitingText());
   });
-  peer.on("connection", (c) => {
-    if (role === "expert") attach(c);
+  p.on("connection", (c) => {
+    if (p === peer && role === "expert") attach(c);
     else c.close();
   });
   // Lost the signalling server. Open connections keep working; reconnect for new ones.
-  peer.on("disconnected", () => {
-    const p = peer;
+  p.on("disconnected", () => {
     retry(() => { if (p === peer && !p.destroyed) p.reconnect(); });
   });
-  peer.on("error", (err) => {
+  p.on("error", (err) => {
+    if (p !== peer) return;
     console.warn("Peer error:", err.type, err);
     if (err.type === "peer-unavailable") {
       // Expert isn't hosting this room yet
       setStatus("connecting", waitingText());
       retry(dial);
     } else if (err.type === "unavailable-id") {
-      // Another tab or phone already hosts this room (or a closed one hasn't timed out)
-      setStatus("disconnected", "room in use");
+      // Another tab or phone already hosts this room (or a closed one hasn't timed out).
+      // Retry first: a status handler may switch to a new room, which cancels it.
       retry(start);
+      setStatus("disconnected", ROOM_IN_USE);
     } else if (peer.destroyed) {
       setStatus("disconnected", err.type);
       retry(start);
@@ -136,6 +145,17 @@ export function connect(asRole, code) {
   role = asRole;
   hostId = `ghostlens-${code}`;
   start();
+}
+
+// Leave the room, e.g. when the role or code changes on the start screen
+export function disconnect() {
+  clearTimeout(retryTimer);
+  const p = peer;
+  peer = null;
+  conn = null;
+  remoteRole = null;
+  p?.destroy();
+  setStatus("disconnected");
 }
 
 // Free the room id right away so a reload can host it again
