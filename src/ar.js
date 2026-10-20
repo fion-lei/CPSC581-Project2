@@ -33,12 +33,8 @@ let status = null;
 
 function makeButton(label, onClick) {
   const button = document.createElement("button");
+  button.className = "btn";
   button.textContent = label;
-  Object.assign(button.style, {
-    minHeight: "48px", padding: "0 24px", border: "none", borderRadius: "24px",
-    background: "rgba(17, 17, 17, 0.7)", color: "#fff", font: "600 16px system-ui, sans-serif",
-    pointerEvents: "auto",
-  });
   button.hidden = true;
   button.addEventListener("click", onClick);
   return button;
@@ -119,30 +115,22 @@ export function initAR() {
     optionalFeatures: ["dom-overlay"],
     domOverlay: { root: hud },
   });
-  button.style.pointerEvents = "auto";
+  button.classList.add("ar-button");
   hud.appendChild(button);
 
   // Placement buttons, bottom centre. Taps on them must not also fire an XR select.
   const bar = document.createElement("div");
-  Object.assign(bar.style, {
-    position: "absolute", left: "0", right: "0", bottom: "96px",
-    display: "flex", justifyContent: "center",
-  });
+  bar.className = "place-bar";
   bar.addEventListener("beforexrselect", (e) => e.preventDefault());
   placeButton = makeButton("Place part", place);
-  Object.assign(placeButton.style, { background: "#EA580C", minWidth: "240px" });
+  placeButton.classList.add("is-active");
   replaceButton = makeButton("Re-place", startPlacing);
   bar.append(placeButton, replaceButton);
   hud.appendChild(bar);
 
   // Hint pill above the button bar
   status = document.createElement("div");
-  Object.assign(status.style, {
-    position: "absolute", left: "50%", bottom: "160px", transform: "translateX(-50%)",
-    width: "max-content", maxWidth: "calc(100% - 32px)", boxSizing: "border-box",
-    padding: "10px 16px", borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)",
-    textAlign: "center", font: "14px system-ui, sans-serif", color: "#fff",
-  });
+  status.className = "toast place-hint";
   status.hidden = true;
   hud.appendChild(status);
 

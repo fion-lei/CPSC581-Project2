@@ -21,23 +21,15 @@ export function initDebug() {
   const hud = document.getElementById("hud");
 
   panel = document.createElement("pre");
-  Object.assign(panel.style, {
-    position: "absolute", left: "16px", top: "16px", margin: "0", padding: "8px 12px",
-    borderRadius: "12px", background: "rgba(17, 17, 17, 0.7)", color: "#fff",
-    font: "12px ui-monospace, monospace", pointerEvents: "none",
-  });
+  panel.className = "debug-panel";
   panel.hidden = !visible;
   hud.appendChild(panel);
 
   // Phone toggle. Taps on it must not also fire an XR select.
   // TODO(#19): remove or hide this button (e.g. only with ?debug) before the demo.
   const button = document.createElement("button");
+  button.className = "chip debug-toggle";
   button.textContent = "Dbg";
-  Object.assign(button.style, {
-    position: "absolute", right: "16px", top: "16px", minWidth: "44px", minHeight: "44px",
-    border: "none", borderRadius: "22px", background: "rgba(17, 17, 17, 0.7)", color: "#fff",
-    font: "600 12px system-ui, sans-serif", pointerEvents: "auto",
-  });
   button.addEventListener("beforexrselect", (e) => e.preventDefault());
   button.addEventListener("click", () => setVisible(!visible));
   hud.appendChild(button);
