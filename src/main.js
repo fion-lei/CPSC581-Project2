@@ -3,8 +3,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot } from "./model.js";
-import { initAR, onSessionStart, onSessionEnd, updateAR } from "./ar.js";
+import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
+import { connect, disconnect, on, onStatus } from "./net.js";
+import { initHud, setStatus, setPeerRole } from "./hud.js";
 
 scene.add(modelRoot);
 
@@ -19,6 +21,14 @@ controls.update();
 
 initAR();
 initDebug();
+
+onStatus(setStatus);
+on("hello", (msg) => {
+  console.log(`hello from ${msg.role}`);
+  setPeerRole(msg.role);
+});
+initHud({ connect, disconnect, onEnter: enterAR, arSupported });
+
 onSessionStart(() => {
   grid.visible = false;
   controls.enabled = false;

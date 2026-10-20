@@ -30,6 +30,7 @@ let tracking = false;
 let placeButton = null;
 let replaceButton = null;
 let status = null;
+let arButton = null;
 
 function makeButton(label, onClick) {
   const button = document.createElement("button");
@@ -105,6 +106,17 @@ export function updateAR(frame) {
   replaceButton.hidden = placing;
 }
 
+// Resolves true if this browser can start an immersive-ar session
+export const arSupported = navigator.xr
+  ? navigator.xr.isSessionSupported("immersive-ar").catch(() => false)
+  : Promise.resolve(false);
+
+// Starts AR through ARButton so it keeps track of the session. Called from a tap;
+// waits for the support check if it hasn't finished yet.
+export async function enterAR() {
+  if (await arSupported && !renderer.xr.isPresenting) arButton?.click();
+}
+
 export function initAR() {
   renderer.xr.enabled = true;
 
@@ -117,6 +129,7 @@ export function initAR() {
   });
   button.classList.add("ar-button");
   hud.appendChild(button);
+  arButton = button;
 
   // Placement buttons, bottom centre. Taps on them must not also fire an XR select.
   const bar = document.createElement("div");
