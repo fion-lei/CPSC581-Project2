@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { getLocalPose } from "./pose.js";
-import { modelRoot } from "./model.js";
+import { isPlaced } from "./ar.js";
 
 const UPDATE_MS = 100; // ~10 Hz keeps the numbers readable
 
@@ -56,7 +56,7 @@ export function updateDebug() {
 
   const pose = getLocalPose();
   if (!pose) {
-    panel.textContent = modelRoot.visible ? "local pose: tracking lost" : "local pose: not placed";
+    panel.textContent = isPlaced() ? "local pose: tracking lost" : "local pose: not placed";
     return;
   }
   const { p, q } = pose;

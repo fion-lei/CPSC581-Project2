@@ -27,3 +27,13 @@ const back = -DEPTH / 2;
 addBox("base", WIDTH, THICK, DEPTH, 0, THICK / 2, 0);
 addBox("upright", WIDTH, HEIGHT, THICK, 0, THICK + HEIGHT / 2, back + THICK / 2);
 addBox("shelf", WIDTH, THICK, SHELF, 0, THICK + HEIGHT + THICK / 2, back + SHELF / 2);
+
+// Translucent look while the part is a placement preview
+export function setPreview(on) {
+  for (const m of [material, edgeMaterial]) {
+    m.transparent = on;
+    m.opacity = on ? 0.45 : 1;
+    m.depthWrite = !on;
+    m.needsUpdate = true;
+  }
+}

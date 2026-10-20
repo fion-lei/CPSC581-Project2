@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { renderer, scene } from "./scene.js";
-import { modelRoot } from "./model.js";
+import { modelRoot, setPreview } from "./model.js";
 
 const startHandlers = [];
 const endHandlers = [];
@@ -9,10 +9,16 @@ const endHandlers = [];
 export function onSessionStart(fn) { startHandlers.push(fn); }
 export function onSessionEnd(fn) { endHandlers.push(fn); }
 
-// Flat ring that marks where the part will go
+// Flat ring with a centre dot that marks where the part will go. Drawn on top so
+// the preview part doesn't hide it.
+const reticleMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false });
 const reticle = new THREE.Mesh(
-  new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
+  new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2), reticleMaterial);
+reticle.add(new THREE.Mesh(
+  new THREE.CircleGeometry(0.008, 16).rotateX(-Math.PI / 2), reticleMaterial));
+reticle.renderOrder = 1;
+reticle.children[0].renderOrder = 1;
 reticle.matrixAutoUpdate = false;
 reticle.visible = false;
 scene.add(reticle);
@@ -39,19 +45,38 @@ function makeButton(label, onClick) {
 }
 
 // Move modelRoot to the reticle, level, with the part's front (+z) facing the phone
-function place() {
-  if (!placing || !reticle.visible) return;
+function moveToReticle() {
   modelRoot.position.setFromMatrixPosition(reticle.matrix);
   const phone = renderer.xr.getCamera().getWorldPosition(new THREE.Vector3());
   modelRoot.rotation.set(0, Math.atan2(phone.x - modelRoot.position.x,
     phone.z - modelRoot.position.z), 0);
+}
+
+function place() {
+  if (!placing || !reticle.visible) return;
+  moveToReticle();
+  setPreview(false);
   modelRoot.visible = true;
   reticle.visible = false;
   placing = false;
 }
 
+function startPlacing() {
+  placing = true;
+  setPreview(true);
+  modelRoot.visible = false;
+}
+
 // False on frames where the device has lost tracking; the XR camera then holds a stale pose
 export function isTracking() { return tracking; }
+
+// False while the part is being placed or re-placed (always true on desktop)
+export function isPlaced() { return !placing; }
+
+function setHint(text) {
+  if (status.textContent !== text) status.textContent = text;
+  status.hidden = !text;
+}
 
 export function updateAR(frame) {
   tracking = !!frame.getViewerPose(renderer.xr.getReferenceSpace());
@@ -69,6 +94,17 @@ export function updateAR(frame) {
     reticle.matrix.makeTranslation(spot.x, spot.y, spot.z);
     reticle.visible = true;
   }
+  // Translucent preview of the part sits on the reticle while placing
+  if (placing) {
+    modelRoot.visible = reticle.visible;
+    if (reticle.visible) moveToReticle();
+  }
+
+  if (!placing) setHint("");
+  else if (hitTestFailed) setHint("Surface detection unavailable. Place part puts it in front of you.");
+  else if (!reticle.visible) setHint("Move your phone slowly over your table to find it");
+  else setHint("Point at your table, then tap to place the part");
+
   placeButton.hidden = !(placing && reticle.visible);
   replaceButton.hidden = placing;
 }
@@ -94,15 +130,18 @@ export function initAR() {
   });
   bar.addEventListener("beforexrselect", (e) => e.preventDefault());
   placeButton = makeButton("Place part", place);
-  replaceButton = makeButton("Re-place", () => { placing = true; });
+  Object.assign(placeButton.style, { background: "#EA580C", minWidth: "240px" });
+  replaceButton = makeButton("Re-place", startPlacing);
   bar.append(placeButton, replaceButton);
   hud.appendChild(bar);
 
+  // Hint pill above the button bar
   status = document.createElement("div");
   Object.assign(status.style, {
-    position: "absolute", left: "16px", right: "16px", bottom: "160px",
+    position: "absolute", left: "50%", bottom: "160px", transform: "translateX(-50%)",
+    width: "max-content", maxWidth: "calc(100% - 32px)", boxSizing: "border-box",
+    padding: "10px 16px", borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)",
     textAlign: "center", font: "14px system-ui, sans-serif", color: "#fff",
-    textShadow: "0 1px 3px #000",
   });
   status.hidden = true;
   hud.appendChild(status);
@@ -127,14 +166,11 @@ export function initAR() {
         console.error("Hit-test unavailable:", err);
         if (session !== renderer.xr.getSession()) return;
         hitTestFailed = true;
-        status.textContent = "Surface detection unavailable. Place part puts it in front of you.";
-        status.hidden = false;
       });
     // Without dom-overlay there are no buttons, so a screen tap places instead.
     // With the overlay, taps are left free for grab and draw (issues 09, 10).
     if (!session.domOverlayState) session.addEventListener("select", place);
-    placing = true;
-    modelRoot.visible = false;
+    startPlacing();
 
     startHandlers.forEach((fn) => fn());
   });
@@ -155,6 +191,7 @@ export function initAR() {
     modelRoot.position.set(0, 0, 0);
     modelRoot.rotation.set(0, 0, 0);
     modelRoot.visible = true;
+    setPreview(false);
 
     endHandlers.forEach((fn) => fn());
   });
