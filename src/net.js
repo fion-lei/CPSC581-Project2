@@ -34,6 +34,9 @@ export function send(msg) {
 
 export function getStatus() { return status; }
 
+// This phone's role ("expert" | "novice"), or null before joining a room
+export function getRole() { return role; }
+
 // Role sent by the other phone in its hello, or null
 export function getRemoteRole() { return remoteRole; }
 
