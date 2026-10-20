@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { renderer, scene } from "./scene.js";
 import { modelRoot, setPreview } from "./model.js";
+import { modelRoot, setPreview } from "./model.js";
 
 const startHandlers = [];
 const endHandlers = [];
@@ -14,6 +15,11 @@ export function onSessionEnd(fn) { endHandlers.push(fn); }
 const reticleMaterial = new THREE.MeshBasicMaterial({
   color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false });
 const reticle = new THREE.Mesh(
+  new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2), reticleMaterial);
+reticle.add(new THREE.Mesh(
+  new THREE.CircleGeometry(0.008, 16).rotateX(-Math.PI / 2), reticleMaterial));
+reticle.renderOrder = 1;
+reticle.children[0].renderOrder = 1;
   new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2), reticleMaterial);
 reticle.add(new THREE.Mesh(
   new THREE.CircleGeometry(0.008, 16).rotateX(-Math.PI / 2), reticleMaterial));
@@ -141,6 +147,9 @@ export function initAR() {
     position: "absolute", left: "50%", bottom: "160px", transform: "translateX(-50%)",
     width: "max-content", maxWidth: "calc(100% - 32px)", boxSizing: "border-box",
     padding: "10px 16px", borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)",
+    position: "absolute", left: "50%", bottom: "160px", transform: "translateX(-50%)",
+    width: "max-content", maxWidth: "calc(100% - 32px)", boxSizing: "border-box",
+    padding: "10px 16px", borderRadius: "16px", background: "rgba(17, 17, 17, 0.7)",
     textAlign: "center", font: "14px system-ui, sans-serif", color: "#fff",
   });
   status.hidden = true;
@@ -151,6 +160,8 @@ export function initAR() {
   renderer.xr.addEventListener("sessionstart", () => {
     savedBackground = scene.background;
     scene.background = null;
+    // Nothing opaque may sit between the camera feed and the overlay
+    document.documentElement.style.background = document.body.style.background = "transparent";
     // Nothing opaque may sit between the camera feed and the overlay
     document.documentElement.style.background = document.body.style.background = "transparent";
 
