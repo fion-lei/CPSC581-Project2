@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { getLocalPose } from "./pose.js";
 import { isPlaced } from "./ar.js";
+import { renderer } from "./scene.js";
 
 const UPDATE_MS = 100; // ~10 Hz keeps the numbers readable
 
@@ -54,9 +55,15 @@ export function updateDebug() {
   if (now - lastUpdate < UPDATE_MS) return;
   lastUpdate = now;
 
+  // "opaque" blend means the browser is not passing the camera feed through
+  const session = renderer.xr.getSession();
+  const xrLine = session
+    ? `\nblend ${session.environmentBlendMode}  overlay ${session.domOverlayState?.type ?? "none"}`
+    : "";
+
   const pose = getLocalPose();
   if (!pose) {
-    panel.textContent = isPlaced() ? "local pose: tracking lost" : "local pose: not placed";
+    panel.textContent = (isPlaced() ? "local pose: tracking lost" : "local pose: not placed") + xrLine;
     return;
   }
   const { p, q } = pose;
@@ -69,5 +76,5 @@ export function updateDebug() {
     `p    ${p.map(f).join(" ")}\n` +
     `q    ${q.map(f).join(" ")}\n` +
     `dist ${dist.toFixed(1)} cm\n` +
-    `yaw  ${yaw.toFixed(0)}°  pitch ${pitch.toFixed(0)}°`;
+    `yaw  ${yaw.toFixed(0)}°  pitch ${pitch.toFixed(0)}°` + xrLine;
 }
