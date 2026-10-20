@@ -21,8 +21,8 @@
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  /* Safe-area padding + 16 px */
-  --edge-top: calc(env(safe-area-inset-top) + 16px);
+  --status-bar-min: 24px;
+  --edge-top: calc(max(env(safe-area-inset-top, 0px), var(--status-bar-min)) + 16px);
   --edge-right: calc(env(safe-area-inset-right) + 16px);
   --edge-bottom: calc(env(safe-area-inset-bottom) + 16px);
   --edge-left: calc(env(safe-area-inset-left) + 16px);
