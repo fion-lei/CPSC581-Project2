@@ -1,0 +1,148 @@
+/* Ghost Lens design tokens and components. Spec: docs/DESIGN.md */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@500;600&display=swap");
+
+:root {
+  --expert: #EA580C;
+  --expert-strong: #C2410C;
+  --novice: #1D4ED8;
+  --novice-soft: #93C5FD;
+  --ink: #16191D;
+  --hud: rgba(21, 23, 26, 0.82);
+  --hud-text: #FFFFFF;
+  --hud-muted: #D1D5DB;
+  --label-bg: #FFFFFF;
+
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Safe-area padding + 16 px */
+  --edge-top: calc(env(safe-area-inset-top) + 16px);
+  --edge-right: calc(env(safe-area-inset-right) + 16px);
+  --edge-bottom: calc(env(safe-area-inset-bottom) + 16px);
+  --edge-left: calc(env(safe-area-inset-left) + 16px);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: #111; color: var(--hud-text);
+  font-family: var(--font-ui);
+}
+canvas { display: block; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+
+/* Component display rules would otherwise beat the hidden attribute */
+[hidden] { display: none !important; }
+
+/* Chip: status pill, mono uppercase. Add .chip-dot inside for a status dot. */
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box;
+  padding: 8px 12px; border: none; border-radius: 999px;
+  background: var(--hud); color: var(--hud-text);
+  font: 500 12px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase;
+}
+button.chip { cursor: pointer; pointer-events: auto; }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hud-muted); }
+.chip-dot.is-expert { background: var(--expert); }
+.chip-dot.is-novice { background: var(--novice-soft); }
+
+/* Button: idle on --hud, .is-active fills with --expert-strong */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  min-height: 48px; padding: 0 24px; border: none; border-radius: 14px;
+  background: var(--hud); color: var(--hud-text);
+  font: 500 15px/1.2 var(--font-ui); cursor: pointer; pointer-events: auto;
+  transition: background-color 150ms var(--ease-out);
+}
+.btn.is-active { background: var(--expert-strong); font-weight: 600; }
+.btn:focus-visible, .chip:focus-visible, .toast-action:focus-visible {
+  outline: 2px solid var(--hud-text); outline-offset: 2px;
+}
+
+/* Toast: one bold line + one short line, optional action on the right */
+.toast {
+  display: flex; align-items: center; gap: 12px; box-sizing: border-box;
+  padding: 14px 16px; border-radius: 14px;
+  background: var(--hud); color: var(--hud-text);
+  font: 500 14px/1.35 var(--font-ui);
+}
+.toast-text { flex: 1; min-width: 0; }
+.toast-title { font-size: 15px; font-weight: 600; }
+.toast-body { color: var(--hud-muted); }
+.toast-action {
+  flex: none; min-height: 44px; padding: 0 16px; border: none; border-radius: 10px;
+  background: var(--novice); color: var(--hud-text);
+  font: 600 15px/1 var(--font-ui); cursor: pointer; pointer-events: auto;
+}
+
+/* Progress bar: label above an 8 px track. Set the fill's width (0–100%). */
+.progress-label { margin-bottom: 8px; font: 500 14px/1.2 var(--font-ui); }
+.progress-track { height: 8px; border-radius: 4px; background: #3A4251; overflow: hidden; }
+.progress-fill {
+  height: 100%; width: 0; border-radius: 4px; background: #60A5FA;
+  transition: width 200ms var(--ease-out);
+}
+
+/* Crosshair: centred ring (12 px radius) + four 10 px ticks, 2.5 px stroke.
+   Markup: <div class="crosshair"></div>; add .is-hit when it hits the part. */
+.crosshair {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
+  transform: translate(-50%, -50%); color: #fff;
+  transition: color 150ms var(--ease-out);
+}
+.crosshair.is-hit { color: var(--expert); }
+.crosshair::before {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 21.5px; height: 21.5px; transform: translate(-50%, -50%);
+  border: 2.5px solid currentColor; border-radius: 50%;
+}
+.crosshair::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(currentColor, currentColor) top / 2.5px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom / 2.5px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) left / 10px 2.5px no-repeat,
+    linear-gradient(currentColor, currentColor) right / 10px 2.5px no-repeat;
+}
+
+/* ---- Placement (issue 03) ---- */
+
+/* ARButton writes its own inline styles (and changes them on hover and support
+   checks), so these must be !important. Display is left to ARButton. */
+.ar-button {
+  position: absolute !important; left: 50% !important; bottom: var(--edge-bottom) !important;
+  width: auto !important; min-width: 160px; transform: translateX(-50%);
+  padding: 0 24px !important; border: none !important; border-radius: 14px !important;
+  background: var(--hud) !important; color: var(--hud-text) !important; opacity: 1 !important;
+  font: 500 15px/48px var(--font-ui) !important; text-align: center !important;
+  text-decoration: none; pointer-events: auto;
+}
+.ar-button:focus-visible { outline: 2px solid var(--hud-text) !important; outline-offset: 2px; }
+
+.place-bar {
+  position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 96px);
+  display: flex; justify-content: center;
+}
+.place-bar .is-active { min-width: 240px; }
+
+.place-hint {
+  position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 160px);
+  transform: translateX(-50%); width: max-content;
+  max-width: calc(100% - var(--edge-left) - var(--edge-right)); text-align: center;
+}
+
+/* ---- Debug readout ---- */
+
+.debug-panel {
+  position: absolute; left: var(--edge-left); top: var(--edge-top); margin: 0;
+  padding: 8px 12px; border-radius: 14px; background: var(--hud); color: var(--hud-text);
+  font: 500 12px/1.4 var(--font-mono); pointer-events: none;
+}
+.debug-toggle {
+  position: absolute; right: var(--edge-right); top: var(--edge-top);
+  min-width: 44px; min-height: 44px; justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
