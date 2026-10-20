@@ -27,3 +27,25 @@ const back = -DEPTH / 2;
 addBox("base", WIDTH, THICK, DEPTH, 0, THICK / 2, 0);
 addBox("upright", WIDTH, HEIGHT, THICK, 0, THICK + HEIGHT / 2, back + THICK / 2);
 addBox("shelf", WIDTH, THICK, SHELF, 0, THICK + HEIGHT + THICK / 2, back + SHELF / 2);
+
+// Dark grid mat under the placement preview (mockup Scene 1), hidden once placed
+const MAT = 0.3;
+const mat = new THREE.Mesh(
+  new THREE.PlaneGeometry(MAT, MAT).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x262a33 }));
+mat.position.y = 0.001;
+const matGrid = new THREE.GridHelper(MAT, 6, 0x3b4252, 0x3b4252);
+matGrid.position.y = 0.002;
+mat.visible = matGrid.visible = false;
+modelRoot.add(mat, matGrid);
+
+// Translucent look on a mat while the part is a placement preview
+export function setPreview(on) {
+  mat.visible = matGrid.visible = on;
+  for (const m of [material, edgeMaterial]) {
+    m.transparent = on;
+    m.opacity = on ? 0.45 : 1;
+    m.depthWrite = !on;
+    m.needsUpdate = true;
+  }
+}
