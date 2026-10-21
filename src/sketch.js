@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { lineMaterial } from "./ghost.js";
+import { icon } from "./pin-drawer.js";
 import { tokenColor } from "./tokens.js";
 
 export const MIN_POINT_DISTANCE = 0.005;
@@ -189,6 +190,20 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
       reset();
       send({ t: "clear", epoch });
     },
+    undo() {
+      if (getRole() !== "expert") return;
+      end();
+      const last = Array.from(strokes.values()).at(-1);
+      if (!last) return;
+      last.line.geometry.dispose();
+      last.object.removeFromParent();
+      strokes.delete(last.id);
+      limited = false;
+      notify();
+      epoch = makeId();
+      send({ t: "clear", epoch });
+      for (const stroke of strokes.values()) transmit(stroke, 0);
+    },
     // Called after the novice's hello, including after reconnecting. Reliable
     // ordered delivery makes clear + snapshot + subsequent deltas one sequence.
     replay() {
@@ -229,7 +244,7 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
 
 // Own only Draw input. View/Grab/Pin remain available to their implementations.
 export function initSketchInput({ sketch, renderer, camera, modelRoot, modelPivot,
-  controls, getRole, getMode, onModeChange, isPlaced, isTracking, layoutBottom }) {
+  controls, getRole, getMode, onModeChange, isPlaced, isTracking }) {
   const canvas = renderer.domElement;
   const hud = document.getElementById("hud");
   const toolbar = hud.querySelector(".expert-toolbar");
@@ -244,15 +259,24 @@ export function initSketchInput({ sketch, renderer, camera, modelRoot, modelPivo
   const actions = document.createElement("div");
   actions.className = "sketch-actions";
   actions.hidden = true;
-  const hint = document.createElement("span");
-  hint.title = "Option/Alt-drag: orbit anywhere. Shift-drag or right-drag: pan. Scroll: zoom.";
+  const undo = document.createElement("button");
+  undo.className = "btn sketch-action";
+  undo.type = "button";
+  undo.setAttribute("aria-label", "Undo latest drawing");
+  undo.title = "Undo latest drawing";
+  undo.innerHTML = icon("<path d='M9 14 4 9l5-5'/><path d='M4 9h10a6 6 0 0 1 0 12h-2'/>");
   const clear = document.createElement("button");
-  clear.className = "btn sketch-clear";
+  clear.className = "btn sketch-action";
   clear.type = "button";
-  clear.textContent = "Clear";
+  clear.title = "Clear all drawings";
   clear.setAttribute("aria-label", "Clear all sketches for both people");
-  actions.append(hint, clear);
-  toolbar.appendChild(actions);
+  clear.innerHTML = icon("<path d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/>");
+  actions.append(undo, clear);
+  hud.appendChild(actions);
+  for (const control of [actions, undo, clear]) {
+    control.addEventListener("beforexrselect", (e) => e.preventDefault());
+    control.addEventListener("keydown", (e) => e.stopPropagation());
+  }
 
   function ready() {
     return getRole() === "expert" && getMode() === "draw" && !toolbar.hidden
@@ -260,24 +284,17 @@ export function initSketchInput({ sketch, renderer, camera, modelRoot, modelPivo
   }
   function render() {
     const state = sketch.getState();
+    undo.disabled = state.count === 0;
     clear.disabled = state.count === 0;
-    hint.textContent = state.limited
-      ? (state.count >= MAX_STROKES ? "Sketch full — clear to continue" : "Stroke full — release to continue")
-      : state.drawing ? "Drawing…"
-        : renderer.xr.isPresenting ? "Hold the screen and move your phone" : "Drag part to draw · drag background to orbit";
   }
   function updateUI() {
     const visible = ready();
     if (visible !== uiVisible) {
       uiVisible = visible;
       actions.hidden = !visible;
-      hud.classList.toggle("has-sketch-tools", visible);
       render();
-      layoutBottom();
     }
   }
-  // Includes text wrapping, window resizing and hidden/shown toolbar slots.
-  new ResizeObserver(layoutBottom).observe(toolbar);
   function release() {
     const id = pointerId;
     pointerId = null;
@@ -362,7 +379,9 @@ export function initSketchInput({ sketch, renderer, camera, modelRoot, modelPivo
   function beforeXRSelect(e) {
     if (e.target instanceof Element && e.target.closest("button, input, select, a, .start-screen")) e.preventDefault();
   }
+  function undoLatest() { release(); sketch.undo(); }
   function clearAll() { release(); sketch.clear(); }
+  undo.addEventListener("click", undoLatest);
   clear.addEventListener("click", clearAll);
   canvas.addEventListener("pointerdown", down, true);
   canvas.addEventListener("pointermove", move, true);

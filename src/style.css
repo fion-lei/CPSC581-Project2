@@ -271,16 +271,14 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
 
-/* This row is part of the measured bottom bar: layoutBottom handles clearance. */
+/* Draw-mode actions use the same right-edge, vertically centred placement as the pin tab. */
 .sketch-actions {
-  grid-column: 1 / -1; order: -1; display: flex; align-items: center;
-  gap: 8px; min-height: 44px; padding: 4px 8px; border-radius: 14px;
-  background: var(--hud);
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 2;
 }
-.sketch-actions > span {
-  flex: 1; font: 500 14px/1.35 var(--font-ui); color: var(--hud-muted);
-}
-.sketch-clear { min-height: 44px; padding: 0 14px; }
+.sketch-action { min-width: 48px; min-height: 48px; padding: 0; }
+.sketch-actions .sketch-action svg { width: 20px; height: 20px; }
+.sketch-action:disabled { opacity: var(--dim); }
 
 /* Toast slot: bottom for the novice, just above the mode bar for the expert.
    hud.js sets --toast-offset and --bottom-clearance to stack the controls. */

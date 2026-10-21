@@ -6,7 +6,7 @@ import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole, getRemoteRole } from "./net.js";
-import { initHud, setStatus, setPeerRole, setCrosshair, layoutBottom } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
@@ -57,7 +57,7 @@ for (const type of ["stroke", "clear"]) on(type, (msg) => {
 });
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 const sketchInput = initSketchInput({ sketch, renderer, camera, modelRoot, modelPivot,
-  controls, getRole, getMode, onModeChange, isPlaced, isTracking, layoutBottom });
+  controls, getRole, getMode, onModeChange, isPlaced, isTracking });
 
 onSessionStart(() => {
   grid.visible = false;
