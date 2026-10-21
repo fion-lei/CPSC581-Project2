@@ -235,15 +235,15 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .session-connection { min-width: 0; }
 .debug-panel { top: calc(var(--edge-top) + var(--session-status-height, 44px) + 12px); }
 
-/* One active expert mode. Buttons remain separate from canvas/AR selection. */
+/* One active expert mode: four equal buttons. The bar catches taps in the gaps
+   so they don't fall through to the AR scene. */
 .expert-toolbar {
   position: absolute; left: var(--edge-left); right: var(--edge-right);
   bottom: var(--edge-bottom); max-width: 440px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
-  padding: 4px; border-radius: 18px; background: var(--hud);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
   pointer-events: auto; z-index: 2;
 }
-.expert-tool { min-width: 0; padding: 0 8px; background: transparent; }
+.expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
 
 /* Lift the existing AR and placement controls above the toolbar. */
