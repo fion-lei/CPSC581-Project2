@@ -49,7 +49,7 @@ on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose
 on("help", () => {
   if (getRole() !== "expert") return;
   showToast("Novice is stuck", "Check in with them", 8000);
-  navigator.vibrate?.([80, 60, 80]);
+  navigator.vibrate?.([50, 100, 50]); // mimicks 2 knocks
 });
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
