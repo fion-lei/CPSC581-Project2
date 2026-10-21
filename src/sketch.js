@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { lineMaterial } from "./ghost.js";
 import { tokenColor } from "./tokens.js";
 
 export const MIN_POINT_DISTANCE = 0.005;
@@ -9,8 +9,10 @@ export const AIR_DISTANCE = 0.15;
 export const MAX_STROKES = 64;
 export const MAX_POINTS = 1024;
 export const BATCH_SIZE = 32;
-const WIDTH = 0.003;
-export const SURFACE_OFFSET = WIDTH * 0.55;
+const SURFACE_WIDTH = 0.003;
+const LINE_WIDTH = 4;
+const UNDERSTROKE_WIDTH = 6;
+export const SURFACE_OFFSET = SURFACE_WIDTH * 0.55;
 const validId = (id) => typeof id === "string" && id.length > 0 && id.length <= 80;
 const validPoint = (p) => Array.isArray(p) && p.length === 3
   && p.every((n) => Number.isFinite(n) && Math.abs(n) <= 100);
@@ -56,9 +58,12 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
   group.name = "sketches";
   modelRoot.add(group);
   const color = tokenColor("--expert");
-  const material = new LineMaterial({ color, linewidth: WIDTH, worldUnits: true });
+  const underMaterial = lineMaterial(tokenColor("--label-bg"), {
+    linewidth: UNDERSTROKE_WIDTH, transparent: true, opacity: 0.45,
+  });
+  const material = lineMaterial(color, { linewidth: LINE_WIDTH, transparent: true });
   const dotMaterial = new THREE.MeshBasicMaterial({ color });
-  const dotGeometry = new THREE.SphereGeometry(WIDTH / 2, 8, 6);
+  const dotGeometry = new THREE.SphereGeometry(SURFACE_WIDTH / 2, 8, 6);
   const strokes = new Map();
   const listeners = new Set();
   const local = new THREE.Vector3();
@@ -78,15 +83,20 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
     geometry.setPositions(new Float32Array((MAX_POINTS - 1) * 6));
     geometry.instanceCount = 0;
     geometry.attributes.instanceStart.data.setUsage(THREE.DynamicDrawUsage);
+    const underLine = new LineSegments2(geometry, underMaterial);
+    underLine.frustumCulled = false;
+    underLine.renderOrder = 0;
+    underLine.visible = false;
     const line = new LineSegments2(geometry, material);
     line.frustumCulled = false; // Bounds would otherwise contain unused buffer entries.
+    line.renderOrder = 1;
     line.visible = false;
     const dot = new THREE.Mesh(dotGeometry, dotMaterial);
     const object = new THREE.Group();
     object.name = id;
-    object.add(line, dot);
+    object.add(underLine, line, dot);
     group.add(object);
-    const stroke = { id, points: [], sent: 0, object, line, dot };
+    const stroke = { id, points: [], sent: 0, object, line, underLine, dot };
     strokes.set(id, stroke);
     return stroke;
   }
@@ -100,7 +110,9 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
     }
     const segments = stroke.points.length - 1;
     stroke.line.geometry.instanceCount = segments;
+    stroke.underLine.geometry.instanceCount = segments;
     stroke.line.visible = segments > 0;
+    stroke.underLine.visible = segments > 0;
     stroke.dot.position.fromArray(stroke.points[0]);
     stroke.dot.visible = segments === 0;
     if (segments > 0) {
@@ -208,7 +220,7 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
       end();
       reset();
       group.removeFromParent();
-      material.dispose(); dotMaterial.dispose(); dotGeometry.dispose();
+      dotMaterial.dispose(); dotGeometry.dispose();
       listeners.clear();
     },
   };
