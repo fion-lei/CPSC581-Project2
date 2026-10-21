@@ -50,7 +50,7 @@ on("help", () => {
   showToast("Novice is stuck", "Check in with them", 0, {
     actions: [{ label: "Got it", primary: true, onClick: hideToast }],
   });
-  navigator.vibrate?.([50, 100, 50]); // mimicks 2 knocks
+  navigator.vibrate?.([50, 100, 50]); // mimics 2 knocks
 });
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);

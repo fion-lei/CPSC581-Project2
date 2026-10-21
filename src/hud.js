@@ -129,7 +129,7 @@ function makeHelpButton(onHelp) {
   helpButton.type = "button";
   helpButton.setAttribute("aria-live", "polite");
   helpButton.addEventListener("click", () => {
-    onHelp();
+    if (!onHelp()) return;
     helpCooldown = setTimeout(() => {
       helpCooldown = 0;
       renderHelp();
