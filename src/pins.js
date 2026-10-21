@@ -8,8 +8,14 @@ import { getMode, onModeChange } from "./expert-tools.js";
 import { lineMaterial } from "./ghost.js";
 import { tokenColor } from "./tokens.js";
 
-const DOT_PX = 7;           // pin dot radius
-const RING_PX = 2.5;        // white ring around the dot
+// Pin anatomy in metres (modelPivot space): a small physical object on the part
+const HEAD_R = 0.004;       // 8 mm sphere
+const RIM_R = 0.005;        // white rim behind the head, reads on any background
+const STEM_LEN = 0.012;     // along the surface normal
+const STEM_R = 0.0006;
+const RING_R = 0.0075;      // 15 mm flat ring on the surface
+const RING_W = 0.001;
+const MIN_HEAD_PX = 5;      // far away, scale the pin up so it never vanishes
 const PULSE_MS = 1600;
 const PULSE_SCALE = 2.8;
 const BEAM_PX = 4;
@@ -28,45 +34,61 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
 const noRaycast = () => {};
 
 const EXPERT = tokenColor("--expert");
-const dotMaterial = new THREE.MeshBasicMaterial({ color: EXPERT });
-const ringMaterial = new THREE.MeshBasicMaterial({ color: tokenColor("--label-bg") });
-// Geometry in px; each pin is scaled every frame so 1 unit = 1 screen px
-const dotGeometry = new THREE.CircleGeometry(DOT_PX, 24);
-const ringGeometry = new THREE.CircleGeometry(DOT_PX + RING_PX, 24);
-const pulseGeometry = new THREE.RingGeometry(DOT_PX, DOT_PX + RING_PX, 32);
+const headMaterial = new THREE.MeshStandardMaterial({ color: EXPERT, roughness: 0.35 });
+const rimMaterial = new THREE.MeshBasicMaterial({ color: tokenColor("--label-bg"), side: THREE.BackSide });
+const stemMaterial = new THREE.MeshStandardMaterial({ color: tokenColor("--expert-strong"), roughness: 0.5 });
+// Ring lies on the part's face: polygonOffset keeps it from z-fighting the surface
+const flat = { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
+const ringMaterial = new THREE.MeshBasicMaterial({ color: EXPERT, ...flat });
+const ringFillMaterial = new THREE.MeshBasicMaterial({
+  color: EXPERT, transparent: true, opacity: 0.18, depthWrite: false, ...flat });
+// Only drawn where the part is in front, so a pin round the back is never lost
+const hiddenMaterial = new THREE.MeshBasicMaterial({
+  color: EXPERT, transparent: true, opacity: 0.45, depthWrite: false, depthFunc: THREE.GreaterDepth });
 
-const Z = new THREE.Vector3(0, 0, 1);
+const headGeometry = new THREE.SphereGeometry(HEAD_R, 24, 16);
+const rimGeometry = new THREE.SphereGeometry(RIM_R, 24, 16);
+// CylinderGeometry runs along +Y, which is the pin's normal; base on the surface
+const stemGeometry = new THREE.CylinderGeometry(STEM_R, STEM_R, STEM_LEN, 8).translate(0, STEM_LEN / 2, 0);
+// RingGeometry is in XY; turn it into the surface plane (XZ)
+const ringGeometry = new THREE.RingGeometry(RING_R - RING_W, RING_R, 40).rotateX(-Math.PI / 2);
+const ringFillGeometry = new THREE.CircleGeometry(RING_R - RING_W, 40).rotateX(-Math.PI / 2);
+// Billboarded circle just outside the rim
+const hiddenGeometry = new THREE.RingGeometry(RIM_R * 1.05, RIM_R * 1.3, 32);
+
+const Y = new THREE.Vector3(0, 1, 0);
 const v = new THREE.Vector3();
 const camPos = new THREE.Vector3();
 const camQuat = new THREE.Quaternion();
 const q = new THREE.Quaternion();
 
-function mesh(geometry, material, z = 0) {
+function mesh(geometry, material) {
   const m = new THREE.Mesh(geometry, material);
-  m.position.z = z;
   m.raycast = noRaycast;
   return m;
 }
 
-// Pin in modelPivot space: p = point, n = surface normal. Local +z is the normal.
+// Pin in modelPivot space: p = point, n = surface normal. Local +y is the normal,
+// so the stem stands up on a top face, sticks out of a side and hangs under a shelf.
 function makePin(id, p, n) {
   const object = new THREE.Group();
   object.position.fromArray(p);
-  object.quaternion.setFromUnitVectors(Z, v.fromArray(n).normalize());
+  object.quaternion.setFromUnitVectors(Y, v.fromArray(n).normalize());
   object.visible = false;
 
-  // Dot + ring face the camera, lifted off the surface so it doesn't sink in
   const head = new THREE.Group();
-  head.position.z = DOT_PX + RING_PX;
-  head.add(mesh(ringGeometry, ringMaterial), mesh(dotGeometry, dotMaterial, 0.5));
+  head.position.y = STEM_LEN;
+  const outline = mesh(hiddenGeometry, hiddenMaterial);
+  head.add(mesh(headGeometry, headMaterial), mesh(rimGeometry, rimMaterial), outline);
 
-  // Landing pulse lies flat on the surface
-  const pulse = mesh(pulseGeometry, new THREE.MeshBasicMaterial({
-    color: EXPERT, transparent: true, depthWrite: false, side: THREE.DoubleSide }), 0.5);
+  // Landing pulse: a copy of the surface ring that grows and fades
+  const pulse = mesh(ringGeometry, new THREE.MeshBasicMaterial({
+    color: EXPERT, transparent: true, depthWrite: false, ...flat }));
   pulse.visible = false;
 
-  object.add(head, pulse);
-  return { id, p, n, object, head, pulse, landAt: 0, pulseAt: -Infinity };
+  object.add(mesh(ringFillGeometry, ringFillMaterial), mesh(ringGeometry, ringMaterial),
+    mesh(stemGeometry, stemMaterial), head, pulse);
+  return { id, p, n, object, outline, pulse, landAt: 0, pulseAt: -Infinity };
 }
 
 // One beam per phone: the expert's aim, or the expert's shot seen by the novice.
@@ -242,12 +264,14 @@ export function initPins({ expertGhost, send }) {
     if (!reducedMotion.matches) beam.material.dashOffset -= dt * DASH_SPEED;
   }
 
-  function updatePin(pin, worldPerPx, now) {
+  function updatePin(pin, worldPerPx, partScale, now) {
+    // Real size up close; never smaller than MIN_HEAD_PX on screen
     pin.object.getWorldPosition(v);
-    pin.object.scale.setScalar(camPos.distanceTo(v) * worldPerPx);
-    // Billboard the head: undo the pin's world rotation, then face the camera
-    pin.object.getWorldQuaternion(q);
-    pin.head.quaternion.copy(q.invert().multiply(camQuat));
+    const minR = camPos.distanceTo(v) * worldPerPx * MIN_HEAD_PX;
+    pin.object.scale.setScalar(Math.max(1, minR / (HEAD_R * partScale)));
+    // Billboard the hidden outline: undo its parent's world rotation, then face the camera
+    pin.outline.parent.getWorldQuaternion(q);
+    pin.outline.quaternion.copy(q.invert().multiply(camQuat));
 
     const t = (now - pin.pulseAt) / PULSE_MS;
     pin.pulse.visible = t >= 0 && t < 1;
@@ -275,8 +299,9 @@ export function initPins({ expertGhost, send }) {
     cam.getWorldQuaternion(camQuat);
     // World units per screen px at 1 m: from the vertical field of view
     const worldPerPx = 2 / (cam.projectionMatrix.elements[5] * window.innerHeight);
+    const partScale = modelPivot.getWorldScale(v).x;
     for (const pin of pins.values()) {
-      if (pin.object.visible) updatePin(pin, worldPerPx, now);
+      if (pin.object.visible) updatePin(pin, worldPerPx, partScale, now);
     }
   }
 
