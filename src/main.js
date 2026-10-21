@@ -2,15 +2,17 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
-import { modelRoot } from "./model.js";
-import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported } from "./ar.js";
+import { modelRoot, modelPivot } from "./model.js";
+import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
-import { initHud, setStatus, setPeerRole } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
+import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
+const centreAim = createCentreAim(modelRoot, modelPivot);
 
 scene.add(modelRoot);
 
@@ -69,6 +71,10 @@ function sendPose() {
 startLoop((_time, frame) => {
   if (renderer.xr.isPresenting) updateAR(frame);
   else controls.update();
+  const ready = getRole() === "expert" && isPlaced()
+    && (!renderer.xr.isPresenting || isTracking());
+  const activeCamera = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  setCrosshair(ready, centreAim.update(activeCamera, ready));
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();

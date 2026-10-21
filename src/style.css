@@ -224,3 +224,34 @@ button.chip { cursor: pointer; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Session chips wrap on narrow phones and leave space for the Dbg button. */
+.session-status {
+  position: absolute; left: var(--edge-left); top: var(--edge-top);
+  right: calc(var(--edge-right) + 56px);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.session-status .chip { min-height: 44px; max-width: 100%; }
+.session-connection { min-width: 0; }
+.call-chip { box-shadow: inset 0 0 0 1px var(--surface-strong); }
+.call-chip[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--expert); }
+.debug-panel { top: calc(var(--edge-top) + var(--session-status-height, 44px) + 12px); }
+
+/* One active expert mode. Buttons remain separate from canvas/AR selection. */
+.expert-toolbar {
+  position: absolute; left: var(--edge-left); right: var(--edge-right);
+  bottom: var(--edge-bottom); max-width: 440px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+  padding: 4px; border-radius: 18px; background: var(--hud);
+  pointer-events: auto; z-index: 2;
+}
+.expert-tool { min-width: 0; padding: 0 8px; background: transparent; }
+.expert-crosshair { pointer-events: none; }
+
+/* Lift the existing AR and placement controls above the toolbar. */
+.has-expert-tools .ar-button {
+  bottom: calc(var(--edge-bottom) + 72px) !important;
+  white-space: nowrap;
+}
+.has-expert-tools .place-bar { bottom: calc(env(safe-area-inset-bottom) + 168px); }
+.has-expert-tools .place-hint { bottom: calc(env(safe-area-inset-bottom) + 232px); }

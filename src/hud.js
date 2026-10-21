@@ -1,4 +1,5 @@
 import { ROOM_IN_USE } from "./net.js";
+import { TOOL_MODES, setMode, onModeChange } from "./expert-tools.js";
 
 const STORE_KEY = "ghostlens.join";
 const TITLES = { expert: "Start a session", novice: "Join a session" };
@@ -13,6 +14,15 @@ let peerRole = null;
 let chip = null;
 let chipDot = null;
 let chipText = null;
+let connectionChip = null;
+let callChip = null;
+let onCall = false;
+let inScene = false;
+let toolbar = null;
+let crosshair = null;
+let aimReady = false;
+let aimHit = false;
+let hudRoot = null;
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
 let enterButton = null;
@@ -52,15 +62,23 @@ function join(role, code) {
   if (joined) net.disconnect();
   joined = role ? { role, code } : null;
   peerRole = null;
+  onCall = false;
+  setMode("view");
   if (joined) net.connect(role, code);
   render();
 }
 
 function render() {
   if (chip && joined) {
-    chipDot.className = `chip-dot is-${state}`;
-    chipText.textContent = [label(joined.role), joined.code, detail || state].join(" · ");
+    chipDot.className = `chip-dot is-${joined.role}`;
+    chipText.textContent = [label(joined.role), joined.code].join(" · ");
+    connectionChip.dot.className = `chip-dot is-${state}`;
+    connectionChip.text.textContent = detail || state;
+    connectionChip.c.title = `Connection: ${detail || state}`;
+    callChip.textContent = onCall ? "On call" : "Not on call";
+    callChip.setAttribute("aria-pressed", String(onCall));
   }
+  renderTools();
   if (!screenStatus) return;
 
   // "Connected · expert", or "Waiting for novice…" while connecting
@@ -76,6 +94,54 @@ function render() {
   enterButton.disabled = !ready;
   enterButton.classList.toggle("is-expert", ready && joined.role === "expert");
   enterButton.classList.toggle("is-novice", ready && joined.role === "novice");
+}
+
+function renderTools() {
+  if (!toolbar) return;
+  const visible = inScene && joined?.role === "expert" && aimReady;
+  toolbar.hidden = crosshair.hidden = !visible;
+  hudRoot.classList.toggle("has-expert-tools", visible);
+}
+
+function makeExpertTools(hud) {
+  toolbar = el("div", "expert-toolbar");
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.setAttribute("aria-label", "Expert tools");
+  const buttons = TOOL_MODES.map((mode) => {
+    const button = el("button", "btn expert-tool", label(mode));
+    button.type = "button";
+    button.dataset.mode = mode;
+    button.addEventListener("click", () => setMode(mode));
+    toolbar.appendChild(button);
+    return button;
+  });
+  onModeChange((mode) => {
+    for (const button of buttons) {
+      const active = button.dataset.mode === mode;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+  });
+  toolbar.addEventListener("beforexrselect", (e) => e.preventDefault());
+  toolbar.addEventListener("keydown", (e) => e.stopPropagation());
+  crosshair = el("div", "crosshair expert-crosshair");
+  crosshair.setAttribute("aria-hidden", "true");
+  toolbar.hidden = crosshair.hidden = true;
+  hud.append(toolbar, crosshair);
+}
+
+// Called each frame with placement/tracking readiness and the centre-ray hit.
+export function setCrosshair(ready, hit) {
+  if (!crosshair) return;
+  if (ready !== aimReady) {
+    aimReady = ready;
+    renderTools();
+  }
+  const nextHit = ready && !!hit;
+  if (nextHit !== aimHit) {
+    aimHit = nextHit;
+    crosshair.classList.toggle("is-hit", nextHit);
+  }
 }
 
 // Full-screen role + room code picker. Joins the room right away. Enter AR unlocks for
@@ -157,6 +223,7 @@ function makeStartScreen(hud, onEnter, arSupported) {
     saveLast(joined.role, joined.code);
     screen.remove();
     screenStatus = enterButton = onRoomInUse = null;
+    inScene = true;
     chip.hidden = false;
     render();
     onEnter();
@@ -175,21 +242,40 @@ function makeStartScreen(hud, onEnter, arSupported) {
 export function initHud({ connect, disconnect, onEnter, arSupported }) {
   net = { connect, disconnect };
   const hud = document.getElementById("hud");
-  ({ c: chip, dot: chipDot, text: chipText } = makeStatusChip("role-chip"));
+  hudRoot = hud;
+  chip = el("div", "session-status");
+  const roleChip = makeStatusChip("session-role");
+  chipDot = roleChip.dot;
+  chipText = roleChip.text;
+  connectionChip = makeStatusChip("session-connection");
+  connectionChip.text.setAttribute("role", "status");
+  callChip = el("button", "chip call-chip", "Not on call");
+  callChip.type = "button";
+  callChip.title = "Mark whether your separate voice call is active";
+  callChip.setAttribute("aria-label", "External voice call active (manual status)");
+  callChip.setAttribute("aria-pressed", "false");
+  callChip.addEventListener("click", () => { onCall = !onCall; render(); });
+  chip.addEventListener("beforexrselect", (e) => e.preventDefault());
+  chip.append(roleChip.c, connectionChip.c, callChip);
   chip.hidden = true;
   hud.appendChild(chip);
+  // Keep the debug readout below the chips even when they wrap on a phone.
+  new ResizeObserver(([entry]) => {
+    hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
+  }).observe(chip);
+  makeExpertTools(hud);
 
   const params = new URLSearchParams(location.search);
   const role = params.get("role");
   const code = params.get("room") ?? "";
   if ((role === "expert" || role === "novice") && validCode(code)) {
+    inScene = true;
     chip.hidden = false;
     join(role, code);
   } else makeStartScreen(hud, onEnter, arSupported);
 }
 
-// Connection state from net.js. Role chip: "EXPERT · 1234 · CONNECTED", or the
-// detail in place of the state ("NOVICE · 1234 · WAITING FOR EXPERT").
+// Connection state from net.js, displayed separately from role and voice-call status.
 export function setStatus(s, d = "") {
   state = s;
   detail = d;
