@@ -6,12 +6,12 @@ import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole, getRemoteRole } from "./net.js";
-import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair, layoutBottom } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
-import { createSketch } from "./sketch.js";
-import { initSketchInput } from "./sketch-input.js";
+import { initPins } from "./pins.js";
+import { createSketch, initSketchInput } from "./sketch.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
@@ -33,6 +33,8 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
+const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
+
 initAR();
 initDebug();
 
@@ -41,14 +43,21 @@ on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
   if (msg.role === "novice") sketch.replay();
+  // The novice (re)joined: give it every pin placed so far. The expert's hello
+  // comes first on the same ordered channel, so the novice clears, then refills.
+  if (getRole() === "expert") pins.resend();
+  else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
+on("pin", pins.addRemote);
+on("unpin", pins.removeRemote);
+on("ack", pins.onAck);
 for (const type of ["stroke", "clear"]) on(type, (msg) => {
   if (getRemoteRole() === "expert") sketch.receive(msg);
 });
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 const sketchInput = initSketchInput({ sketch, renderer, camera, modelRoot, modelPivot,
-  controls, getRole, getMode, onModeChange, isPlaced, isTracking });
+  controls, getRole, getMode, onModeChange, isPlaced, isTracking, layoutBottom });
 
 onSessionStart(() => {
   grid.visible = false;
@@ -88,5 +97,6 @@ startLoop((time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
 });
