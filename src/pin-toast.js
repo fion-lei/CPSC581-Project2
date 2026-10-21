@@ -1,10 +1,8 @@
 import { showToast, hideToast } from "./hud.js";
 import { PROBLEMS, fixText } from "./pin-labels.js";
-import { icon, CHECK_ICON } from "./pin-drawer.js";
+import { FIND_ICON, CHECK_ICON } from "./icons.js";
 
 const TOAST_MS = 10000;
-// Find: a target ring with four ticks
-const FIND_ICON = icon("<circle cx='12' cy='12' r='6'/><circle cx='12' cy='12' r='1.5'/><path d='M12 2v4M12 18v4M2 12h4M18 12h4'/>");
 
 // Novice: the newest pin from the expert in the toast slot. Its fix, then a find
 // button and a check. Hides after 10 s; the drawer keeps every pin.

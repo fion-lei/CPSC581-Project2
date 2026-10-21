@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { lineMaterial } from "./ghost.js";
-import { icon } from "./pin-drawer.js";
+import { UNDO_ICON, TRASH_ICON, setIconButton } from "./icons.js";
 import { tokenColor } from "./tokens.js";
 
 export const MIN_POINT_DISTANCE = 0.005;
@@ -261,16 +261,10 @@ export function initSketchInput({ sketch, renderer, camera, modelRoot, modelPivo
   actions.hidden = true;
   const undo = document.createElement("button");
   undo.className = "btn sketch-action";
-  undo.type = "button";
-  undo.setAttribute("aria-label", "Undo latest drawing");
-  undo.title = "Undo latest drawing";
-  undo.innerHTML = icon("<path d='M9 14 4 9l5-5'/><path d='M4 9h10a6 6 0 0 1 0 12h-2'/>");
+  setIconButton(undo, UNDO_ICON, "Undo latest drawing");
   const clear = document.createElement("button");
   clear.className = "btn sketch-action";
-  clear.type = "button";
-  clear.title = "Clear all drawings";
-  clear.setAttribute("aria-label", "Clear all sketches for both people");
-  clear.innerHTML = icon("<path d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/>");
+  setIconButton(clear, TRASH_ICON, "Clear all drawings for both people");
   actions.append(undo, clear);
   hud.appendChild(actions);
   for (const control of [actions, undo, clear]) {

@@ -1,4 +1,5 @@
 import { ROOM_IN_USE } from "./net.js";
+import { setIconButton } from "./icons.js";
 import { TOOL_MODES, setMode, onModeChange } from "./expert-tools.js";
 
 const STORE_KEY = "ghostlens.join";
@@ -169,9 +170,7 @@ export function showToast(title, body = "", ms = 0, { actions = [], timer = fals
   toast.classList.toggle("has-actions", actions.length > 0);
   toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
     const b = el("button", `toast-action is-icon${primary ? "" : " is-secondary"}`);
-    b.type = "button";
-    b.innerHTML = icon;
-    b.setAttribute("aria-label", text);
+    setIconButton(b, icon, text);
     b.addEventListener("click", onClick);
     return b;
   }));

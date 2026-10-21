@@ -1,16 +1,6 @@
 import { PROBLEMS, FIXES, fixText, valueText, CHECK_BADGE } from "./pin-labels.js";
 import { layoutBottom, hideToast, setToolsHidden } from "./hud.js";
-
-// Inline icons: 2 px stroke, round caps (docs/DESIGN.md)
-export const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
-// Thumbtack (Lucide "pin", ISC licence)
-const PIN_ICON = icon("<path d='M12 17v5'/><path d='M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z'/>");
-const CLOSE_ICON = icon("<path d='M6 6l12 12M18 6L6 18'/>");
-const TRASH_ICON = icon("<path d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/>");
-export const CHECK_ICON = icon("<path d='M5 12.5l4.5 4.5L19 7.5'/>");
-// Waiting for the novice: an empty ring the size of the check badge
-const WAIT_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="6"/></svg>`;
+import { PIN_ICON, CLOSE_ICON, TRASH_ICON, WAIT_ICON, setIconButton } from "./icons.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -38,7 +28,7 @@ function shield(e) {
 // only known once in a room.
 export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll, onAck, onOpen, onClose }) {
   const tab = button("btn pin-tab");
-  tab.innerHTML = PIN_ICON;
+  setIconButton(tab, PIN_ICON, "Pins");
   // Expert: new confirmations; novice: pins still waiting to be confirmed
   const dot = el("span", "pin-tab-dot");
   dot.hidden = true;
@@ -50,8 +40,7 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
   const head = el("div", "pin-drawer-head");
   const title = el("div", "field-label");
   const close = button("btn pin-icon-button");
-  close.setAttribute("aria-label", "Close pins");
-  close.innerHTML = CLOSE_ICON;
+  setIconButton(close, CLOSE_ICON, "Close pins");
   head.append(title, close);
   const rows = el("ul", "pin-rows");
   const empty = el("p", "pin-empty", "No pins yet");
@@ -95,6 +84,7 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
     // (orange, novice tab) or the novice's confirmations (blue, expert tab)
     dot.classList.toggle("is-new-pin", novice);
     tab.setAttribute("aria-label", `Pins (${pins.length})`);
+    tab.title = `Pins (${pins.length})`;
     title.textContent = `Pins · ${pins.length}`;
     empty.hidden = pins.length > 0;
     removeAll.hidden = novice || pins.length === 0;
@@ -113,8 +103,7 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
       if (novice) {
         if (!pin.acked) {
           const confirm = button("pin-row-confirm");
-          confirm.setAttribute("aria-label", `Confirm pin ${pin.no}`);
-          confirm.innerHTML = WAIT_ICON;
+          setIconButton(confirm, WAIT_ICON, `Confirm pin ${pin.no}`);
           confirm.addEventListener("click", () => onAck(pin.id));
           row.appendChild(confirm);
         } else {
@@ -133,8 +122,7 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
       row.appendChild(status);
       if (novice) return row;
       const remove = button("pin-row-remove");
-      remove.setAttribute("aria-label", `Remove pin ${pin.no}`);
-      remove.innerHTML = TRASH_ICON;
+      setIconButton(remove, TRASH_ICON, `Remove pin ${pin.no}`);
       remove.addEventListener("click", () => onRemove(pin.id));
       row.append(remove);
       return row;
@@ -167,8 +155,7 @@ export function createPinSheet(hud) {
   const title = el("div", "pin-sheet-title");
   const step = el("div", "pin-sheet-step");
   const close = button("pin-sheet-close");
-  close.setAttribute("aria-label", "Cancel pin");
-  close.innerHTML = CLOSE_ICON;
+  setIconButton(close, CLOSE_ICON, "Cancel pin");
   head.append(back, title, step, close);
   const body = el("div", "pin-sheet-body");
   const foot = el("div", "pin-sheet-foot");
