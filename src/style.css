@@ -38,7 +38,11 @@ html, body {
   font-family: var(--font-ui);
 }
 canvas { display: block; }
-#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud {
+  position: fixed; inset: 0; pointer-events: none;
+  /* Just below the session chips, which can wrap; hud.js sets --session-status-height here */
+  --below-chips: calc(var(--edge-top) + var(--session-status-height, 28px) + 12px);
+}
 
 /* Component display rules would otherwise beat the hidden attribute */
 [hidden] { display: none !important; }
@@ -213,7 +217,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
 /* Sits below the session chips, which can wrap on a phone */
 .debug-panel {
   position: absolute; left: var(--edge-left); margin: 0;
-  top: calc(var(--edge-top) + var(--session-status-height, 28px) + 12px);
+  top: var(--below-chips);
   padding: 8px 12px; border-radius: 14px; background: var(--hud); color: var(--hud-text);
   font: 500 12px/1.4 var(--font-mono); pointer-events: none;
 }
@@ -251,4 +255,28 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .toast-area {
   position: absolute; left: var(--edge-left); right: var(--edge-right);
   bottom: calc(var(--edge-bottom) + var(--toast-offset, 0px)); max-width: 440px; margin: 0 auto;
+}
+
+/* Confirmation pill: top-centre below the chips, optional action on the right.
+   Moves left of the pin drawer while that is open. */
+.pill {
+  position: absolute; left: var(--edge-left); right: var(--edge-right); top: var(--below-chips);
+  width: max-content; max-width: calc(100% - var(--edge-left) - var(--edge-right)); margin: 0 auto;
+  display: flex; align-items: center; gap: 12px; box-sizing: border-box;
+  padding: 10px 16px; border-radius: 999px; background: var(--label-bg); color: var(--ink);
+  font: 600 15px/1.2 var(--font-ui); pointer-events: auto; z-index: 3;
+}
+.pill.has-action { padding: 8px 8px 8px 16px; border-radius: 14px; }
+.pill-action {
+  flex: none; min-height: 44px; padding: 0 16px; border: none; border-radius: 10px;
+  background: var(--ink); color: var(--hud-text);
+  font: 600 15px/1 var(--font-ui); cursor: pointer;
+}
+.pill-action:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Hold hint, centred just above the mode bar */
+.pin-hint {
+  position: absolute; left: 50%; bottom: calc(var(--edge-bottom) + var(--toast-offset, 0px));
+  transform: translateX(-50%); width: max-content;
+  max-width: calc(100% - var(--edge-left) - var(--edge-right)); padding: 10px 14px; text-align: center;
 }
