@@ -6,7 +6,7 @@ import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
-import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair, showToast } from "./hud.js";
 import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
@@ -39,7 +39,12 @@ on("hello", (msg) => {
   setPeerRole(msg.role);
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
-initHud({ connect, disconnect, onEnter: enterAR, arSupported });
+on("help", () => {
+  if (getRole() !== "expert") return;
+  showToast("Novice is stuck", "Check in with them", 8000);
+  navigator.vibrate?.([80, 60, 80]);
+});
+initHud({ connect, disconnect, onEnter: enterAR, onHelp: () => send({ t: "help" }), arSupported });
 
 onSessionStart(() => {
   grid.visible = false;

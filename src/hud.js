@@ -25,6 +25,9 @@ let toast = null;
 let toastTitle = null;
 let toastBody = null;
 let toastTimer = 0;
+let helpButton = null;
+let helpCooldown = 0;
+const HELP_COOLDOWN_MS = 10000; // cooldown for help so it doesn't spam the expert
 const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
@@ -67,6 +70,8 @@ function join(role, code) {
   peerRole = null;
   setMode("view");
   hideToast();
+  clearTimeout(helpCooldown); 
+  helpCooldown = 0; 
   if (joined) net.connect(role, code);
   render();
 }
@@ -79,6 +84,7 @@ function render() {
     connectionChip.text.textContent = detail || state;
     connectionChip.c.title = `Connection: ${detail || state}`;
   }
+  renderHelp();
   renderTools();
   if (!screenStatus) return;
 
@@ -95,6 +101,30 @@ function render() {
   enterButton.disabled = !ready;
   enterButton.classList.toggle("is-expert", ready && joined.role === "expert");
   enterButton.classList.toggle("is-novice", ready && joined.role === "novice");
+}
+
+// Renders help button for novice -> expert communication
+function renderHelp() {
+  if (!helpButton) return;
+  helpButton.hidden = joined?.role !== "novice";
+  helpButton.disabled = !!helpCooldown || state !== "connected";
+  helpButton.textContent = helpCooldown ? "Expert notified" : "Help";
+}
+
+function makeHelpButton(onHelp) {
+  helpButton = el("button", "chip help-chip");
+  helpButton.type = "button";
+  helpButton.setAttribute("aria-live", "polite");
+  helpButton.addEventListener("click", () => {
+    onHelp();
+    helpCooldown = setTimeout(() => {
+      helpCooldown = 0;
+      renderHelp();
+    }, HELP_COOLDOWN_MS);
+    renderHelp();
+  });
+  helpButton.addEventListener("keydown", (e) => e.stopPropagation());
+  return helpButton;
 }
 
 function renderTools() {
@@ -283,7 +313,7 @@ function makeStartScreen(hud, onEnter, arSupported) {
 
 // Start screen, then onEnter() from its Enter AR button.
 // ?role=expert&room=1234 skips the screen and joins straight away.
-export function initHud({ connect, disconnect, onEnter, arSupported }) {
+export function initHud({ connect, disconnect, onEnter, onHelp, arSupported }) {
   net = { connect, disconnect };
   const hud = document.getElementById("hud");
   hudRoot = hud;
@@ -294,7 +324,7 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
   connectionChip = makeStatusChip("session-connection");
   connectionChip.text.setAttribute("role", "status");
   chip.addEventListener("beforexrselect", (e) => e.preventDefault());
-  chip.append(roleChip.c, connectionChip.c);
+  chip.append(roleChip.c, connectionChip.c, makeHelpButton(onHelp));
   chip.hidden = true;
   hud.appendChild(chip);
   // Keep the debug readout below the chips even when they wrap on a phone.
