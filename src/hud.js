@@ -203,10 +203,12 @@ export function showToast(title, body = "", ms = 0, { actions = [], timer = fals
   toastBody.hidden = !body;
   toast.classList.toggle("has-actions", actions.length > 0);
   toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
-    const b = el("button", `toast-action is-icon${primary ? "" : " is-secondary"}`);
+    const b = el("button", `toast-action${icon ? " is-icon" : ""}${primary ? "" : " is-secondary"}`);
     b.type = "button";
-    b.innerHTML = icon;
-    b.setAttribute("aria-label", text);
+    if (icon) {
+      b.innerHTML = icon;
+      b.setAttribute("aria-label", text);
+    } else b.textContent = text;
     b.addEventListener("click", onClick);
     return b;
   }));

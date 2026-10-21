@@ -90,13 +90,13 @@ button.chip { cursor: pointer; pointer-events: auto; }
   background: var(--hud); color: var(--hud-text);
   font: 500 14px/1.35 var(--font-ui);
 }
-.toast-text { flex: 1; min-width: 0; }
-.toast-title { font-size: 15px; font-weight: 600; }
-.toast-body { color: var(--hud-muted); }
+.toast-text { flex: 1; min-width: 0; font-family: var(--font-ui); letter-spacing: 0; text-transform: none; }
+.toast-title { font: 600 15px/1.2 var(--font-ui); letter-spacing: 0; text-transform: none; }
+.toast-body { color: var(--hud-muted); font: 500 14px/1.35 var(--font-ui); letter-spacing: 0; text-transform: none; }
 .toast-action {
   flex: none; min-height: 44px; padding: 0 16px; border: none; border-radius: 10px;
   background: var(--novice); color: var(--hud-text);
-  font: 600 15px/1 var(--font-ui); cursor: pointer; pointer-events: auto;
+  font: 600 15px/1 var(--font-ui); letter-spacing: 0; text-transform: none; cursor: pointer; pointer-events: auto;
 }
 /* Pin toast: icon buttons on the right, the timer bar across the bottom */
 .toast.has-actions { flex-wrap: wrap; }
@@ -244,7 +244,10 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .debug-toggle {
   position: absolute; right: var(--edge-right); top: var(--edge-top);
-  min-width: 44px; min-height: 44px; justify-content: center;
+  justify-content: center;
+}
+.debug-toggle::before {
+  content: ""; position: absolute; inset: -8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -265,9 +268,12 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .help-chip {
   position: absolute; top: var(--edge-top);
   right: calc(var(--edge-right) + var(--debug-clearance, 0px));
-  min-height: 44px; white-space: nowrap;
+  white-space: nowrap;
   box-shadow: inset 0 0 0 1px var(--novice-soft);
   transition: color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+.help-chip::before {
+  content: ""; position: absolute; inset: -8px;
 }
 
 .help-chip:disabled { 

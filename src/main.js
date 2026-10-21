@@ -6,12 +6,11 @@ import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
-import { initHud, setStatus, setPeerRole, setCrosshair, showToast } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair, showToast, hideToast } from "./hud.js";
 import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 import { initPins } from "./pins.js";
-
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
 
@@ -48,7 +47,9 @@ on("hello", (msg) => {
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("help", () => {
   if (getRole() !== "expert") return;
-  showToast("Novice is stuck", "Check in with them", 8000);
+  showToast("Novice is stuck", "Check in with them", 0, {
+    actions: [{ label: "Got it", primary: true, onClick: hideToast }],
+  });
   navigator.vibrate?.([50, 100, 50]); // mimicks 2 knocks
 });
 on("pin", pins.addRemote);
