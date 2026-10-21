@@ -21,6 +21,11 @@ let crosshair = null;
 let aimReady = false;
 let aimHit = false;
 let hudRoot = null;
+let toast = null;
+let toastTitle = null;
+let toastBody = null;
+let toastTimer = 0;
+const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
 let enterButton = null;
@@ -61,6 +66,7 @@ function join(role, code) {
   joined = role ? { role, code } : null;
   peerRole = null;
   setMode("view");
+  hideToast();
   if (joined) net.connect(role, code);
   render();
 }
@@ -95,7 +101,49 @@ function renderTools() {
   if (!toolbar) return;
   const visible = inScene && joined?.role === "expert" && aimReady;
   toolbar.hidden = crosshair.hidden = !visible;
-  hudRoot.classList.toggle("has-expert-tools", visible);
+  layoutBottom();
+}
+
+// Stack from the bottom: mode bar, toast, then the AR and placement controls.
+function layoutBottom() {
+  if (!toolbar || !toast) return;
+  const toolbarSpace = toolbar.hidden ? 0 : toolbar.offsetHeight + BOTTOM_GAP;
+  const toastSpace = toast.hidden ? 0 : toast.offsetHeight + BOTTOM_GAP;
+  hudRoot.style.setProperty("--toast-offset", `${toolbarSpace}px`);
+  hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace}px`);
+}
+
+function makeToast(hud) {
+  toast = el("div", "toast toast-area");
+  toast.setAttribute("role", "status");
+  const text = el("div", "toast-text");
+  toastTitle = el("div", "toast-title");
+  toastBody = el("div", "toast-body");
+  text.append(toastTitle, toastBody);
+  toast.append(text);
+  toast.addEventListener("beforexrselect", (e) => e.preventDefault());
+  toast.hidden = true;
+  hud.appendChild(toast);
+}
+
+// Short message for both roles: one bold line + optional short line.
+// Stays until hideToast(), or for ms milliseconds when given.
+export function showToast(title, body = "", ms = 0) {
+  if (!toast) return;
+  clearTimeout(toastTimer);
+  toastTitle.textContent = title;
+  toastBody.textContent = body;
+  toastBody.hidden = !body;
+  toast.hidden = false;
+  layoutBottom();
+  if (ms) toastTimer = setTimeout(hideToast, ms);
+}
+
+export function hideToast() {
+  if (!toast) return;
+  clearTimeout(toastTimer);
+  toast.hidden = true;
+  layoutBottom();
 }
 
 function makeExpertTools(hud) {
@@ -253,6 +301,7 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
   new ResizeObserver(([entry]) => {
     hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
   }).observe(chip);
+  makeToast(hud);
   makeExpertTools(hud);
 
   const params = new URLSearchParams(location.search);

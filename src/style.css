@@ -119,7 +119,8 @@ button.chip { cursor: pointer; pointer-events: auto; }
 /* ARButton writes its own inline styles (and changes them on hover and support
    checks), so these must be !important. Display is left to ARButton. */
 .ar-button {
-  position: absolute !important; left: 50% !important; bottom: var(--edge-bottom) !important;
+  position: absolute !important; left: 50% !important;
+  bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px)) !important;
   width: auto !important; min-width: 160px; transform: translateX(-50%);
   padding: 0 24px !important; border: none !important; border-radius: 14px !important;
   background: var(--hud) !important; color: var(--hud-text) !important; opacity: 1 !important;
@@ -129,13 +130,15 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .ar-button:focus-visible { outline: 2px solid var(--hud-text) !important; outline-offset: 2px; }
 
 .place-bar {
-  position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 96px);
+  position: absolute; left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 96px + var(--bottom-clearance, 0px));
   display: flex; justify-content: center;
 }
 .place-bar .is-active { min-width: 240px; }
 
 .place-hint {
-  position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 160px);
+  position: absolute; left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 160px + var(--bottom-clearance, 0px));
   transform: translateX(-50%); width: max-content;
   max-width: calc(100% - var(--edge-left) - var(--edge-right)); text-align: center;
 }
@@ -240,10 +243,9 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
 
-/* Lift the existing AR and placement controls above the toolbar. */
-.has-expert-tools .ar-button {
-  bottom: calc(var(--edge-bottom) + 72px) !important;
-  white-space: nowrap;
+/* Toast slot: bottom for the novice, just above the mode bar for the expert.
+   hud.js sets --toast-offset and --bottom-clearance to stack the controls. */
+.toast-area {
+  position: absolute; left: var(--edge-left); right: var(--edge-right);
+  bottom: calc(var(--edge-bottom) + var(--toast-offset, 0px)); max-width: 440px; margin: 0 auto;
 }
-.has-expert-tools .place-bar { bottom: calc(env(safe-area-inset-bottom) + 168px); }
-.has-expert-tools .place-hint { bottom: calc(env(safe-area-inset-bottom) + 232px); }
