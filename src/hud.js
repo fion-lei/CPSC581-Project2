@@ -15,8 +15,6 @@ let chip = null;
 let chipDot = null;
 let chipText = null;
 let connectionChip = null;
-let callChip = null;
-let onCall = false;
 let inScene = false;
 let toolbar = null;
 let crosshair = null;
@@ -62,7 +60,6 @@ function join(role, code) {
   if (joined) net.disconnect();
   joined = role ? { role, code } : null;
   peerRole = null;
-  onCall = false;
   setMode("view");
   if (joined) net.connect(role, code);
   render();
@@ -75,8 +72,6 @@ function render() {
     connectionChip.dot.className = `chip-dot is-${state}`;
     connectionChip.text.textContent = detail || state;
     connectionChip.c.title = `Connection: ${detail || state}`;
-    callChip.textContent = onCall ? "On call" : "Not on call";
-    callChip.setAttribute("aria-pressed", String(onCall));
   }
   renderTools();
   if (!screenStatus) return;
@@ -249,14 +244,8 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
   chipText = roleChip.text;
   connectionChip = makeStatusChip("session-connection");
   connectionChip.text.setAttribute("role", "status");
-  callChip = el("button", "chip call-chip", "Not on call");
-  callChip.type = "button";
-  callChip.title = "Mark whether your separate voice call is active";
-  callChip.setAttribute("aria-label", "External voice call active (manual status)");
-  callChip.setAttribute("aria-pressed", "false");
-  callChip.addEventListener("click", () => { onCall = !onCall; render(); });
   chip.addEventListener("beforexrselect", (e) => e.preventDefault());
-  chip.append(roleChip.c, connectionChip.c, callChip);
+  chip.append(roleChip.c, connectionChip.c);
   chip.hidden = true;
   hud.appendChild(chip);
   // Keep the debug readout below the chips even when they wrap on a phone.

@@ -233,8 +233,6 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .session-status .chip { min-height: 44px; max-width: 100%; }
 .session-connection { min-width: 0; }
-.call-chip { box-shadow: inset 0 0 0 1px var(--surface-strong); }
-.call-chip[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--expert); }
 .debug-panel { top: calc(var(--edge-top) + var(--session-status-height, 44px) + 12px); }
 
 /* One active expert mode. Buttons remain separate from canvas/AR selection. */
