@@ -125,10 +125,10 @@ button.chip { cursor: pointer; pointer-events: auto; }
    Markup: <div class="crosshair"></div>; add .is-hit when it hits the part. */
 .crosshair {
   position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
-  transform: translate(-50%, -50%); color: #fff;
-  transition: color 150ms var(--ease-out);
+  transform: translate(-50%, -50%); color: var(--hud-text); opacity: var(--dim);
+  transition: opacity 150ms var(--ease-out);
 }
-.crosshair.is-hit { color: var(--expert); }
+.crosshair.is-hit { opacity: 1; }
 .crosshair::before {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: 21.5px; height: 21.5px; transform: translate(-50%, -50%);
@@ -270,12 +270,6 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
-
-/* Draw stays white against orange strokes; opacity still indicates a part hit. */
-.has-sketch-tools .expert-crosshair {
-  color: var(--hud-text); filter: drop-shadow(0 1px 2px var(--ink));
-}
-.has-sketch-tools .expert-crosshair:not(.is-hit) { opacity: var(--dim); }
 
 /* This row is part of the measured bottom bar: layoutBottom handles clearance. */
 .sketch-actions {
