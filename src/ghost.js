@@ -2,10 +2,11 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { tokenColor } from "./tokens.js";
 
 const COLORS = {
-  expert: 0xEA580C, // --expert
-  novice: 0x1D4ED8, // --novice
+  expert: tokenColor("--expert"),
+  novice: tokenColor("--novice"),
 };
 const NOVICE_SCALE = 0.8;
 
@@ -25,9 +26,10 @@ const TIMEOUT_MS = 2000;
 const fillMaterial = (color, opacity, side) => new THREE.MeshBasicMaterial({
   color, transparent: true, opacity, depthWrite: false, side });
 
-// Fat lines; linewidth is in CSS px because resolution is the window size
+// Fat lines; linewidth is in CSS px because resolution is the window size.
+// Shared with pins.js for the laser beam.
 const lineMaterials = [];
-function lineMaterial(color, options) {
+export function lineMaterial(color, options) {
   const m = new LineMaterial({ color, linewidth: 2, depthWrite: false, ...options });
   m.resolution.set(window.innerWidth, window.innerHeight);
   lineMaterials.push(m);

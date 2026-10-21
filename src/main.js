@@ -10,6 +10,7 @@ import { initHud, setStatus, setPeerRole, setCrosshair, showToast } from "./hud.
 import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
+import { initPins } from "./pins.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
@@ -30,6 +31,8 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
+const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
+
 initAR();
 initDebug();
 
@@ -37,6 +40,10 @@ onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
+  // The novice (re)joined: give it every pin placed so far. The expert's hello
+  // comes first on the same ordered channel, so the novice clears, then refills.
+  if (getRole() === "expert") pins.resend();
+  else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("help", () => {
@@ -44,6 +51,9 @@ on("help", () => {
   showToast("Novice is stuck", "Check in with them", 8000);
   navigator.vibrate?.([80, 60, 80]);
 });
+on("pin", pins.addRemote);
+on("unpin", pins.removeRemote);
+on("ack", pins.onAck);
 initHud({ connect, disconnect, onEnter: enterAR, onHelp: () => send({ t: "help" }), arSupported });
 
 onSessionStart(() => {
@@ -83,5 +93,6 @@ startLoop((_time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
 });
