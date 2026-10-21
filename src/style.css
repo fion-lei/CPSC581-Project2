@@ -144,16 +144,21 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 
 
-/* ARButton writes its own inline styles (and changes them on hover and support
-   checks), so these must be !important. Display is left to ARButton. */
+/* STOP AR, bottom centre. ARButton inline styles need !important. */
+.ar-controls {
+  position: absolute; left: 50%;
+  bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px));
+  transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+  pointer-events: none; z-index: 2;
+}
+.ar-controls > * { pointer-events: auto; }
 .ar-button {
-  position: absolute !important; left: 50% !important;
-  bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px)) !important;
-  width: auto !important; min-width: 160px; transform: translateX(-50%);
+  position: relative !important; left: auto !important; bottom: auto !important;
+  width: auto !important; min-width: 160px; transform: none !important;
   padding: 0 24px !important; border: none !important; border-radius: 14px !important;
   background: var(--hud) !important; color: var(--hud-text) !important; opacity: 1 !important;
   font: 500 15px/48px var(--font-ui) !important; text-align: center !important;
-  text-decoration: none; pointer-events: auto;
+  text-decoration: none;
 }
 .ar-button:focus-visible { outline: 2px solid var(--hud-text) !important; outline-offset: 2px; }
 
@@ -280,6 +285,17 @@ button.chip { cursor: pointer; pointer-events: auto; }
   color: var(--hud-muted); 
   box-shadow: none; cursor: default; 
 }
+
+/* Mute: bottom-right, both roles. Icon-only. */
+.mute-chip {
+  position: absolute; right: var(--edge-right);
+  bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px));
+  width: 48px; height: 48px; padding: 0; justify-content: center; z-index: 2;
+}
+.mute-chip::before {
+  content: ""; position: absolute; inset: -8px;
+}
+.mute-chip svg { width: 18px; height: 18px; display: block; }
 
 /* One active expert mode: four equal buttons. The bar catches taps in the gaps
    so they don't fall through to the AR scene. */

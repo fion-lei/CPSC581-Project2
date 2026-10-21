@@ -11,6 +11,8 @@ import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 import { initPins } from "./pins.js";
+import { play } from "./audio.js";
+
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
 
@@ -48,7 +50,7 @@ on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose
 on("help", () => {
   if (getRole() !== "expert") return;
   showToast("Novice is stuck", "Check in with them", 0, {
-    actions: [{ label: "Got it", primary: true, onClick: hideToast }],
+    actions: [{ label: "Got it", primary: true, onClick: () => { play("gotIt"); hideToast(); } }],
   });
   navigator.vibrate?.([50, 100, 50]); // mimics 2 knocks
 });

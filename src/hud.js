@@ -1,5 +1,6 @@
 import { ROOM_IN_USE } from "./net.js";
 import { TOOL_MODES, setMode, onModeChange } from "./expert-tools.js";
+import { unlock, setMuted, isMuted, onMuteChange } from "./audio.js";
 
 const STORE_KEY = "ghostlens.join";
 const TITLES = { expert: "Start a session", novice: "Join a session" };
@@ -40,6 +41,9 @@ const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 let helpButton = null;
 let helpCooldown = 0;
 const HELP_COOLDOWN_MS = 10000; // cooldown for help so it doesn't spam the expert
+let muteButton = null;
+const SPEAKER_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 5a9 9 0 0 1 0 14"/></svg>`;
+const SPEAKER_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
 const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
@@ -98,6 +102,7 @@ function render() {
     connectionChip.c.title = `Connection: ${detail || state}`;
   }
   renderHelp();
+  renderMute();
   renderTools();
   if (!screenStatus) return;
 
@@ -140,9 +145,34 @@ function makeHelpButton(onHelp) {
   helpButton.addEventListener("beforexrselect", (e) => e.preventDefault());
   // Keep the session chips clear of the help button as its label changes
   new ResizeObserver(() => {
-    hudRoot.style.setProperty("--help-clearance", `${helpButton.offsetWidth && helpButton.offsetWidth + 8}px`);
+    const w = helpButton.offsetWidth;
+    hudRoot.style.setProperty("--help-clearance", `${w ? w + 8 : 0}px`);
   }).observe(helpButton);
   return helpButton;
+}
+
+function renderMute() {
+  if (!muteButton) return;
+  muteButton.hidden = !inScene;
+  const on = !isMuted();
+  muteButton.setAttribute("aria-pressed", String(on));
+  muteButton.setAttribute("aria-label", on ? "Sound on" : "Sound muted");
+  muteButton.innerHTML = on ? SPEAKER_ON : SPEAKER_OFF;
+}
+
+function makeMuteButton() {
+  muteButton = el("button", "chip mute-chip");
+  muteButton.type = "button";
+  muteButton.addEventListener("click", () => {
+    unlock();
+    setMuted(!isMuted());
+  });
+  muteButton.addEventListener("keydown", (e) => e.stopPropagation());
+  muteButton.addEventListener("beforexrselect", (e) => e.preventDefault());
+  onMuteChange(renderMute);
+  renderMute();
+  hudRoot.appendChild(muteButton);
+  return muteButton;
 }
 
 function renderTools() {
@@ -408,6 +438,7 @@ function makeStartScreen(hud, onEnter, arSupported) {
   // Desktop and phones without AR still get in, to the non-AR view
   arSupported.then((ok) => { if (!ok) enter.textContent = "Continue without AR"; });
   enter.addEventListener("click", () => {
+    unlock();
     saveLast(joined.role, joined.code);
     screen.remove();
     screenStatus = enterButton = onRoomInUse = null;
@@ -441,6 +472,7 @@ export function initHud({ connect, disconnect, onEnter, onHelp, arSupported }) {
   chip.append(roleChip.c, connectionChip.c);
   chip.hidden = true;
   hud.append(chip, makeHelpButton(onHelp));
+  makeMuteButton();
   // Keep the debug readout below the chips even when they wrap on a phone.
   new ResizeObserver(([entry]) => {
     hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
@@ -457,6 +489,7 @@ export function initHud({ connect, disconnect, onEnter, onHelp, arSupported }) {
     chip.hidden = false;
     join(role, code);
   } else makeStartScreen(hud, onEnter, arSupported);
+  renderMute();
 }
 
 // Connection state from net.js, shown in its own chip next to the role chip.

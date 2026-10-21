@@ -8,6 +8,7 @@ import { getMode, onModeChange } from "./expert-tools.js";
 import { lineMaterial } from "./ghost.js";
 import { tokenColor, tokenNumber } from "./tokens.js";
 import { showToast, showPill, setHint } from "./hud.js";
+import { play } from "./audio.js";
 import { overhangAngle, fixText, validMark, createPinLabels } from "./pin-labels.js";
 import { createPinDrawer, createPinSheet } from "./pin-drawer.js";
 import { createPinToast } from "./pin-toast.js";
@@ -246,6 +247,7 @@ export function initPins({ expertGhost, send, getRole }) {
   function land(pin, now) {
     pin.object.visible = true;
     pin.pulseAt = now;
+    if (isNovice()) play("pin");
   }
 
   function fadeBeam(now) {
@@ -338,12 +340,12 @@ export function initPins({ expertGhost, send, getRole }) {
           // The draft turns solid with a pulse and gets the next number
           pin.no = ++lastNo;
           pin.pulseAt = performance.now();
-          send(pinMessage(pin));
+          if (send(pinMessage(pin))) play("pin", { quiet: true });
           showPill(`Pin ${pin.no} sent to novice`);
         } else if (changed) {
           // A new fix needs confirming again
           pin.acked = false;
-          send(pinMessage(pin));
+          if (send(pinMessage(pin))) play("pin", { quiet: true });
           showPill(`Pin ${pin.no} updated`);
         }
         renderDrawer();
@@ -391,7 +393,7 @@ export function initPins({ expertGhost, send, getRole }) {
     removed.delete(id);
     const pin = addPin(makePin(data.id, data.p, data.n, data.no, data), { pulse: true });
     land(pin, performance.now());
-    send(pinMessage(pin));
+    if (send(pinMessage(pin))) play("pin", { quiet: true });
     renderDrawer();
   }
 
@@ -410,6 +412,7 @@ export function initPins({ expertGhost, send, getRole }) {
     const pin = pins.get(id);
     if (!pin?.no || pin.acked) return;
     pin.acked = true;
+    play("gotIt");
     if (!drawer.isOpen()) drawer.setDot(true);
     renderDrawer();
   }
@@ -532,7 +535,7 @@ export function initPins({ expertGhost, send, getRole }) {
     if (!pin?.no || pin.acked) return;
     pin.acked = true;
     acks.set(id, markKey(pin));
-    send({ t: "ack", id });
+    if (send({ t: "ack", id })) play("gotIt", { quiet: true });
     renderDrawer();
     toast.close(id);
   }
