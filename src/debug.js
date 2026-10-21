@@ -34,6 +34,7 @@ export function initDebug() {
   button.addEventListener("beforexrselect", (e) => e.preventDefault());
   button.addEventListener("click", () => setVisible(!visible));
   hud.appendChild(button);
+  hud.classList.add("has-debug"); // help button to the left of debug, without it in the top right corner
 
   // Desktop toggle
   window.addEventListener("keydown", (e) => {

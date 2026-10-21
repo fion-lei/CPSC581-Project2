@@ -106,7 +106,7 @@ function render() {
 // Renders help button for novice -> expert communication
 function renderHelp() {
   if (!helpButton) return;
-  helpButton.hidden = joined?.role !== "novice";
+  helpButton.hidden = !inScene || joined?.role !== "novice";
   helpButton.disabled = !!helpCooldown || state !== "connected";
   helpButton.textContent = helpCooldown ? "Expert notified" : "Help";
 }
@@ -124,6 +124,11 @@ function makeHelpButton(onHelp) {
     renderHelp();
   });
   helpButton.addEventListener("keydown", (e) => e.stopPropagation());
+  helpButton.addEventListener("beforexrselect", (e) => e.preventDefault());
+  // Keep the session chips clear of the help button as its label changes
+  new ResizeObserver(() => {
+    hudRoot.style.setProperty("--help-clearance", `${helpButton.offsetWidth && helpButton.offsetWidth + 8}px`);
+  }).observe(helpButton);
   return helpButton;
 }
 
@@ -324,9 +329,9 @@ export function initHud({ connect, disconnect, onEnter, onHelp, arSupported }) {
   connectionChip = makeStatusChip("session-connection");
   connectionChip.text.setAttribute("role", "status");
   chip.addEventListener("beforexrselect", (e) => e.preventDefault());
-  chip.append(roleChip.c, connectionChip.c, makeHelpButton(onHelp));
+  chip.append(roleChip.c, connectionChip.c);
   chip.hidden = true;
-  hud.appendChild(chip);
+  hud.append(chip, makeHelpButton(onHelp));
   // Keep the debug readout below the chips even when they wrap on a phone.
   new ResizeObserver(([entry]) => {
     hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
