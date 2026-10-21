@@ -9,6 +9,7 @@ import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
 import { initHud, setStatus, setPeerRole } from "./hud.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
+import { initViewpoint, updateViewpoint, receiveViewpoint, getSavedPose } from "./viewpoint.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 
@@ -30,11 +31,16 @@ controls.update();
 
 initAR();
 initDebug();
+initViewpoint();
+
+on("viewpoint", receiveViewpoint);
 
 onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
+  const saved = getSavedPose();
+  if (msg.role === "novice" && saved) send({ t: "viewpoint", p: saved.p, q: saved.q });
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
@@ -73,4 +79,5 @@ startLoop((_time, frame) => {
   ghosts.expert.update();
   ghosts.novice.update();
   updateDebug();
+  updateViewpoint();
 });

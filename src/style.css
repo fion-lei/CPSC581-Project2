@@ -208,6 +208,29 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .code-input::placeholder { color: var(--hud-muted); opacity: 0.4; }
 .code-input:focus { border-color: var(--novice-soft); }
 
+/* Expert Viewpoint save button and camera capture effect */
+.view-button {
+  position:absolute; right: var(--edge-right); top: calc(var(--edge-bottom) + 70px);
+}
+
+.view-flash {
+  position: absolute; inset: 16px; pointer-events: none; opacity: 1;
+  transition: opacity 400ms ease;
+  background:
+    linear-gradient(#fff,#fff) left top/24px 3px no-repeat,
+    linear-gradient(#fff,#fff) left top/3px 24px no-repeat,
+    linear-gradient(#fff,#fff) right top/24px 3px no-repeat,
+    linear-gradient(#fff,#fff) right top/3px 24px no-repeat,
+    linear-gradient(#fff,#fff) left bottom/24px 3px no-repeat,
+    linear-gradient(#fff,#fff) left bottom/3px 24px no-repeat,
+    linear-gradient(#fff,#fff) right bottom/24px 3px no-repeat,
+    linear-gradient(#fff,#fff) right bottom/3px 24px no-repeat;
+}
+.view-toast {
+  position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 220px);
+  transform: translateX(-50%); width: max-content;
+}
+
 /* ---- Debug readout ---- */
 
 /* Sits below the role chip */
