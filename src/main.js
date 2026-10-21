@@ -12,6 +12,7 @@ import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 import { initViewpoint, updateViewpoint, receiveViewpoint, getSavedPose } from "./viewpoint.js";
 import { initPins } from "./pins.js";
+import { initGrab } from "./grab.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
@@ -33,6 +34,7 @@ controls.enableDamping = true;
 controls.update();
 
 const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
+const grab = initGrab({ send, controls });
 
 initAR();
 initDebug();
@@ -49,13 +51,14 @@ on("hello", (msg) => {
   // The novice (re)joined: give it every pin placed so far
   // The novice (re)joined: give it every pin placed so far. The expert's hello
   // comes first on the same ordered channel, so the novice clears, then refills.
-  if (getRole() === "expert") pins.resend();
+  if (getRole() === "expert") {pins.resend(); grab.resend();}
   else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
 on("ack", pins.onAck);
+on("grab", grab.receive);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {
@@ -95,6 +98,7 @@ startLoop((_time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  grab.update(activeCamera, ready, centreAim.getHit());
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
   updateViewpoint();
