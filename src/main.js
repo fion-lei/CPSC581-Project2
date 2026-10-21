@@ -49,6 +49,7 @@ on("hello", (msg) => {
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("help", () => {
   if (getRole() !== "expert") return;
+  play("gotIt");
   showToast("Novice is stuck", "Check in with them", 0, {
     actions: [{ label: "Got it", primary: true, onClick: () => { play("gotIt"); hideToast(); } }],
   });
@@ -57,7 +58,15 @@ on("help", () => {
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
 on("ack", pins.onAck);
-initHud({ connect, disconnect, onEnter: enterAR, onHelp: () => send({ t: "help" }), arSupported });
+initHud({
+  connect, disconnect, onEnter: enterAR,
+  onHelp: () => {
+    const ok = send({ t: "help" });
+    if (ok) play("gotIt", { quiet: true });
+    return ok;
+  },
+  arSupported,
+});
 
 onSessionStart(() => {
   grid.visible = false;

@@ -1,26 +1,27 @@
 // Sound effects for events 
 // Web audio synths used for actions 
 const STORE_KEY = "ghostlens.mute";
-const QUIET = 0.35;
+const QUIET = 0.55;
 const MIN_INTERVAL_MS = 100;
-const MASTER = 0.35;
+const MASTER = 0.55;
 
-// Update with more sounds as they are added 
+// Update with more sounds as they are added
 const SOUNDS = {
-  grab: { freqs: [180, 140], dur: 0.08, type: "triangle", fall: true },
-  release: { freqs: [140, 200], dur: 0.1, type: "triangle", fall: false },
-  pin: { freqs: [660], dur: 0.06, type: "sine", fall: false },
-  stroke: { freqs: [420, 380], dur: 0.04, type: "sawtooth", fall: true },
-  view: { freqs: [440, 554], dur: 0.12, type: "sine", fall: false },
-  aligned: { freqs: [392, 523, 659], dur: 0.18, type: "sine", fall: false },
-  gotIt: { freqs: [784, 988], dur: 0.1, type: "sine", fall: false },
+  grab: { freqs: [330, 392], dur: 0.09, type: "triangle", fall: false },
+  release: { freqs: [392, 294], dur: 0.12, type: "triangle", fall: true },
+  pin: { freqs: [659, 880], dur: 0.1, type: "sine", fall: false },
+  stroke: { freqs: [440, 392], dur: 0.05, type: "triangle", fall: true },
+  view: { freqs: [440, 587], dur: 0.14, type: "sine", fall: false },
+  aligned: { freqs: [523, 659, 784], dur: 0.3, type: "sine", fall: false },
+  gotIt: { freqs: [784, 1047], dur: 0.14, type: "sine", fall: false },
+  mute: { freqs: [523, 330], dur: 0.12, type: "sine", fall: true },
 };
 
 let ctx = null;
 let master = null;
 let muted = loadMuted();
 const lastPlayed = new Map();
-const muteHandlers = [];
+const muteHandlers = new Set();
 
 function loadMuted() {
   try { return localStorage.getItem(STORE_KEY) === "1"; } catch { return false; }
@@ -32,7 +33,7 @@ function saveMuted(on) {
 
 function ensure() {
   if (ctx) return ctx;
-  const AC = window.AudioContext || window.AudioContext;
+  const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
   ctx = new AC();
   master = ctx.createGain();
@@ -43,60 +44,87 @@ function ensure() {
 
 export function unlock() {
   const c = ensure();
-  if (!c) return;
-  if (c.state === "suspended") c.resume().catch(() => {});
+  if (!c) return Promise.resolve();
+  if (c.state !== "running") return c.resume().catch(() => {});
+  return Promise.resolve();
 }
 
 export function isMuted() { return muted; }
 
-export function onMuteChange(fn) { muteHandlers.push(fn); }
+export function onMuteChange(fn) {
+  muteHandlers.add(fn);
+  return () => muteHandlers.delete(fn);
+}
 
 export function setMuted(on) {
+  const was = muted;
   muted = !!on;
   saveMuted(muted);
-  const c = ensure();
-  if (c && master) {
-    const t = c.currentTime;
+  if (ctx && master) {
+    const t = ctx.currentTime;
     master.gain.cancelScheduledValues(t);
-    master.gain.setValueAtTime(master.gain.value, t);
-    master.gain.linearRampToValueAtTime(muted ? 0 : MASTER, t + 0.04);
+    if (muted && !was) {
+      play("mute", { force: true });
+      const hold = t + SOUNDS.mute.dur * 2;
+      master.gain.setValueAtTime(MASTER, t);
+      master.gain.setValueAtTime(MASTER, hold);
+      master.gain.linearRampToValueAtTime(0, hold + 0.04);
+    } else if (!muted) {
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(MASTER, t + 0.04);
+    }
   }
   muteHandlers.forEach((fn) => fn(muted));
 }
 
-// Play sound effect 
-// TODO: add more sounds as they are updated  
-export function play(name, { quiet = false } = {}) {
+export function play(name, { quiet = false, force = false } = {}) {
   const spec = SOUNDS[name];
-  if (!spec || muted) return;
+  if (!spec || (muted && !force)) return;
   const c = ensure();
-  if (!c || c.state !== "running") return;
-  const now = performance.now();
-  if (now - (lastPlayed.get(name) ?? 0) < MIN_INTERVAL_MS) return;
-  lastPlayed.set(name, now);
+  if (!c) return;
+  if (c.state !== "running") {
+    c.resume().catch(() => {});
+    return;
+  }
 
-  const t0 = c.currentTime;
+  const nowMs = performance.now();
+  if (nowMs - (lastPlayed.get(name) ?? -Infinity) < MIN_INTERVAL_MS) return;
+  lastPlayed.set(name, nowMs);
+
+  const t0 = c.currentTime + 0.005;
   const step = spec.dur / Math.max(1, spec.freqs.length);
-  const voice = c.createGain();
+  const len = step * 1.6;
   const peak = quiet ? QUIET : 1;
-  voice.gain.setValueAtTime(0, t0);
-  voice.gain.linearRampToValueAtTime(peak, t0 + 0.008);
-  voice.gain.setValueAtTime(peak, t0 + spec.dur - 0.02);
-  voice.gain.linearRampToValueAtTime(0, t0 + spec.dur);
-  voice.connect(master);
+  const bend = spec.fall ? 0.97 : 1.02;
 
   spec.freqs.forEach((freq, i) => {
+    const s = t0 + i * step;
+    const e = s + len;
     const osc = c.createOscillator();
     osc.type = spec.type;
-    const start = t0 + i * step * 0.55;
-    const f0 = spec.fall ? freq : freq;
-    const f1 = spec.fall ? freq * 0.85 : freq * 1.05;
-    osc.frequency.setValueAtTime(f0, start);
-    osc.frequency.linearRampToValueAtTime(f1, start + step);
-    osc.connect(voice);
-    osc.start(start);
-    osc.stop(t0 + spec.dur + 0.02);
+    osc.frequency.setValueAtTime(freq, s);
+    osc.frequency.exponentialRampToValueAtTime(freq * bend, e);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(peak, s + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, e);
+    osc.connect(g);
+    g.connect(master);
+    osc.start(s);
+    osc.stop(e + 0.02);
   });
 }
 
-document.addEventListener("pointerdown", () => unlock(), { once: true, capture: true });
+const UNLOCK_EVENTS = ["pointerup", "touchend", "click", "keydown"];
+function onGesture() {
+  unlock().then(() => {
+    if (ctx?.state === "running") {
+      UNLOCK_EVENTS.forEach((ev) => document.removeEventListener(ev, onGesture, true));
+    }
+  });
+}
+UNLOCK_EVENTS.forEach((ev) => document.addEventListener(ev, onGesture, true));
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && ctx) unlock();
+});

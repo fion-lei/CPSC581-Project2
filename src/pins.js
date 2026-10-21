@@ -553,7 +553,10 @@ export function initPins({ expertGhost, send, getRole }) {
       known.acked = false;
       acks.delete(id);
       renderDrawer();
-      if (!r) toast.show(known);
+      if (!r) {
+        play("pin");
+        toast.show(known);
+      }
       return;
     }
     const pin = addPin(makePin(id, p, n, no, mark), { pulse: !r });

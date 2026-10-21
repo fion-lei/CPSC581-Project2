@@ -164,8 +164,10 @@ function makeMuteButton() {
   muteButton = el("button", "chip mute-chip");
   muteButton.type = "button";
   muteButton.addEventListener("click", () => {
-    unlock();
-    setMuted(!isMuted());
+    unlock().then(() => {
+      setMuted(!isMuted());
+      navigator.vibrate?.(40);
+    });
   });
   muteButton.addEventListener("keydown", (e) => e.stopPropagation());
   muteButton.addEventListener("beforexrselect", (e) => e.preventDefault());
