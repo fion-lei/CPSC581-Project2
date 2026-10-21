@@ -2,10 +2,11 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { tokenColor } from "./tokens.js";
 
 const COLORS = {
-  expert: 0xEA580C, // --expert
-  novice: 0x1D4ED8, // --novice
+  expert: tokenColor("--expert"),
+  novice: tokenColor("--novice"),
 };
 const NOVICE_SCALE = 0.8;
 

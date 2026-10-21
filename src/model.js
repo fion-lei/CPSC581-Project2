@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { tokenColor } from "./tokens.js";
 
 export const modelRoot = new THREE.Group();
 export const modelPivot = new THREE.Group();
@@ -11,8 +12,8 @@ const HEIGHT = 0.12; // upright height
 const SHELF = 0.08;  // shelf depth, overhangs forward from the upright
 
 const material = new THREE.MeshStandardMaterial({
-  color: 0x9ca3af, metalness: 0.3, roughness: 0.6 });
-const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x1f2937 });
+  color: tokenColor("--part"), metalness: 0, roughness: 0.6 });
+const edgeMaterial = new THREE.LineBasicMaterial({ color: tokenColor("--part-edge") });
 
 function addBox(name, w, h, d, x, y, z) {
   const geometry = new THREE.BoxGeometry(w, h, d);
