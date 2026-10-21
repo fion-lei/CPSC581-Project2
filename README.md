@@ -22,8 +22,7 @@ to guide a novice through a CAD part remotely in AR.
 ## Requirements
 
 For a shared session, both people need a device with internet access and a
-separate voice call, such as a phone call or Discord. Voice is not built into
-Ghost Lens. The devices do not need to be on the same Wi-Fi.
+separate voice call. Voice is not built into this project. The devices do not need to be on the same Wi-Fi.
 
 Phone AR requires camera permission and HTTPS. The live demo provides HTTPS
 without any local setup.
@@ -60,7 +59,9 @@ WebRTC connections, so try another network or a phone hotspot if needed.
 
 ## Development
 
-Install **Node.js 22.12+** and **npm**.
+Install 
+- Node.js 22.12+
+- npm
 
 ### Run locally
 
