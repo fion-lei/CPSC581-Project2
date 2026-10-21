@@ -118,6 +118,7 @@ function makeExpertTools(hud) {
     }
   });
   toolbar.addEventListener("beforexrselect", (e) => e.preventDefault());
+  // Keys typed on a focused tool button must not reach debug.js's "D" toggle.
   toolbar.addEventListener("keydown", (e) => e.stopPropagation());
   crosshair = el("div", "crosshair expert-crosshair");
   crosshair.setAttribute("aria-hidden", "true");
@@ -264,7 +265,7 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
   } else makeStartScreen(hud, onEnter, arSupported);
 }
 
-// Connection state from net.js, displayed separately from role and voice-call status.
+// Connection state from net.js, shown in its own chip next to the role chip.
 export function setStatus(s, d = "") {
   state = s;
   detail = d;
