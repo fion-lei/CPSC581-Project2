@@ -2,16 +2,19 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { renderer, scene, camera, startLoop } from "./scene.js";
-import { modelRoot } from "./model.js";
-import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported } from "./ar.js";
+import { modelRoot, modelPivot } from "./model.js";
+import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
-import { initHud, setStatus, setPeerRole } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
+import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 import { initViewpoint, updateViewpoint, receiveViewpoint, getSavedPose } from "./viewpoint.js";
+import { initPins } from "./pins.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
+const centreAim = createCentreAim(modelRoot, modelPivot);
 
 scene.add(modelRoot);
 
@@ -29,6 +32,8 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
+const pins = initPins({ expertGhost: ghosts.expert.object, send });
+
 initAR();
 initDebug();
 initViewpoint();
@@ -41,8 +46,11 @@ on("hello", (msg) => {
   setPeerRole(msg.role);
   const saved = getSavedPose();
   if (msg.role === "novice" && saved) send({ t: "viewpoint", p: saved.p, q: saved.q });
+  // The novice (re)joined: give it every pin placed so far
+  if (getRole() === "expert") pins.resend();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
+on("pin", pins.addRemote);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {
@@ -75,9 +83,14 @@ function sendPose() {
 startLoop((_time, frame) => {
   if (renderer.xr.isPresenting) updateAR(frame);
   else controls.update();
+  const ready = getRole() === "expert" && isPlaced()
+    && (!renderer.xr.isPresenting || isTracking());
+  const activeCamera = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  setCrosshair(ready, centreAim.update(activeCamera, ready));
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
   updateViewpoint();
 });
