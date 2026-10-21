@@ -10,6 +10,7 @@ import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
+import { initPins } from "./pins.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
@@ -30,6 +31,8 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
+const pins = initPins({ expertGhost: ghosts.expert.object, send });
+
 initAR();
 initDebug();
 
@@ -37,8 +40,11 @@ onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
+  // The novice (re)joined: give it every pin placed so far
+  if (getRole() === "expert") pins.resend();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
+on("pin", pins.addRemote);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {
@@ -78,5 +84,6 @@ startLoop((_time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
 });

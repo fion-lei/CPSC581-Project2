@@ -13,6 +13,9 @@
   --label-bg: #FFFFFF;
   --surface: #2A2F36;
   --surface-strong: #3A4049;
+  /* 3D part (read by src/tokens.js) */
+  --part: #E5E9EE;
+  --part-edge: #4B5563;
   /* Connection dot only */
   --status-connecting: #F59E0B;
   --status-connected: #22C55E;
