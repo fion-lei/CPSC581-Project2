@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host",
-    "test": "node --test"
+    "preview": "vite preview --host"
   },
   "dependencies": {
     "peerjs": "^1.5.4",
