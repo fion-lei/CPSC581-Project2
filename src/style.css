@@ -449,6 +449,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .pin-drawer-head { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
 .pin-drawer-head .field-label { margin: 0; }
+.pin-drawer-actions { display: flex; }
 .pin-icon-button { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
 .pin-rows {
   flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;

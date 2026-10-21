@@ -1,6 +1,6 @@
 import { PROBLEMS, FIXES, fixText, valueText, CHECK_BADGE } from "./pin-labels.js";
 import { layoutBottom, hideToast, setToolsHidden } from "./hud.js";
-import { PIN_ICON, CLOSE_ICON, TRASH_ICON, WAIT_ICON, setIconButton } from "./icons.js";
+import { PIN_ICON, EYE_ICON, EYE_OFF_ICON, CLOSE_ICON, TRASH_ICON, WAIT_ICON, setIconButton } from "./icons.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -24,9 +24,9 @@ function shield(e) {
 // A tab on the right edge opens a drawer listing every pin. Selecting a row highlights
 // its pin in the scene. Each row shows whether the novice confirmed it (blue check).
 // Expert (Pin mode): the trash icon removes a pin. Novice: no removing; a waiting
-// pin has a check button instead. isNovice() is read on each render: the role is
-// only known once in a room.
-export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll, onAck, onOpen, onClose }) {
+// pin has a check button instead. Both: the eye in the header hides every pin on this
+// phone. isNovice() is read on each render: the role is only known once in a room.
+export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll, onAck, onToggleHidden, onOpen, onClose }) {
   const tab = button("btn pin-tab");
   setIconButton(tab, PIN_ICON, "Pins");
   // Expert: new confirmations; novice: pins still waiting to be confirmed
@@ -41,7 +41,10 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
   const title = el("div", "field-label");
   const close = button("btn pin-icon-button");
   setIconButton(close, CLOSE_ICON, "Close pins");
-  head.append(title, close);
+  const hide = button("btn pin-icon-button");
+  const actions = el("div", "pin-drawer-actions");
+  actions.append(hide, close);
+  head.append(title, actions);
   const rows = el("ul", "pin-rows");
   const empty = el("p", "pin-empty", "No pins yet");
   const removeAll = button("pin-remove-all", "Remove all");
@@ -75,11 +78,15 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
 
   tab.addEventListener("click", () => setOpen(true));
   close.addEventListener("click", dismiss);
+  hide.addEventListener("click", onToggleHidden);
   removeAll.addEventListener("click", onRemoveAll);
 
-  // pins: sent pins in placement order; selectedId: the highlighted one, or null
-  function render(pins, selectedId) {
+  // pins: sent pins in placement order; selectedId: the highlighted one, or null;
+  // hidden: the pins are hidden on this phone
+  function render(pins, selectedId, hidden) {
     const novice = isNovice();
+    setIconButton(hide, hidden ? EYE_OFF_ICON : EYE_ICON, hidden ? "Show pins" : "Hide pins");
+    hide.setAttribute("aria-pressed", String(hidden));
     // The dot is in the colour of whoever is waiting on you: the expert's pins
     // (orange, novice tab) or the novice's confirmations (blue, expert tab)
     dot.classList.toggle("is-new-pin", novice);
