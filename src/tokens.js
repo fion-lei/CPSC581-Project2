@@ -10,3 +10,10 @@ export function tokenColor(name) {
   if (!value) console.warn(`Missing colour token ${name}`);
   return new THREE.Color(value || undefined);
 }
+
+// Plain number tokens, e.g. --dim (an opacity)
+export function tokenNumber(name) {
+  const value = parseFloat(styles.getPropertyValue(name));
+  if (Number.isNaN(value)) console.warn(`Missing number token ${name}`);
+  return value;
+}
