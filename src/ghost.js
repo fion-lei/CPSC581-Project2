@@ -26,9 +26,10 @@ const TIMEOUT_MS = 2000;
 const fillMaterial = (color, opacity, side) => new THREE.MeshBasicMaterial({
   color, transparent: true, opacity, depthWrite: false, side });
 
-// Fat lines; linewidth is in CSS px because resolution is the window size
+// Fat lines; linewidth is in CSS px because resolution is the window size.
+// Shared with pins.js for the laser beam.
 const lineMaterials = [];
-function lineMaterial(color, options) {
+export function lineMaterial(color, options) {
   const m = new LineMaterial({ color, linewidth: 2, depthWrite: false, ...options });
   m.resolution.set(window.innerWidth, window.innerHeight);
   lineMaterials.push(m);
