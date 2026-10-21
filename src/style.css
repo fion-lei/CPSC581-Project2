@@ -38,6 +38,8 @@
   --dim: 0.4;
   --pin-label-max: 200px;
   --pin-drawer-width: min(220px, 60vw);
+  --icon-size: 20px;
+  --icon-target: 48px;
 }
 
 html, body {
@@ -447,6 +449,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .pin-drawer-head { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
 .pin-drawer-head .field-label { margin: 0; }
+.pin-drawer-actions { display: flex; }
 .pin-icon-button { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
 .pin-rows {
   flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
@@ -502,3 +505,14 @@ button.chip { cursor: pointer; pointer-events: auto; }
   cursor: pointer; pointer-events: auto;
 }
 .pin-remove-all:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+
+.icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  box-sizing: border-box; width: var(--icon-target); height: var(--icon-target);
+  min-width: var(--icon-target); min-height: var(--icon-target); padding: 0;
+}
+.icon-button .icon {
+  display: block; flex: none; width: var(--icon-size); height: var(--icon-size);
+}
+.icon-button:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+.icon-button:disabled { opacity: var(--dim); cursor: default; }
