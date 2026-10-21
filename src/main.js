@@ -31,7 +31,7 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
-const pins = initPins({ expertGhost: ghosts.expert.object, send });
+const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
 
 initAR();
 initDebug();
@@ -48,6 +48,7 @@ on("hello", (msg) => {
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
+on("ack", pins.onAck);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {

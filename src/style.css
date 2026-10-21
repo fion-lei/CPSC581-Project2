@@ -6,6 +6,8 @@
   --expert-strong: #C2410C;
   --novice: #1D4ED8;
   --novice-soft: #93C5FD;
+  --novice-dot: #BFDBFE;
+  --expert-soft: #FDBA74;
   --ink: #16191D;
   --hud: rgba(21, 23, 26, 0.82);
   --hud-text: #FFFFFF;
@@ -96,6 +98,20 @@ button.chip { cursor: pointer; pointer-events: auto; }
   background: var(--novice); color: var(--hud-text);
   font: 600 15px/1 var(--font-ui); cursor: pointer; pointer-events: auto;
 }
+/* Pin toast: icon buttons on the right, the timer bar across the bottom */
+.toast.has-actions { flex-wrap: wrap; }
+.toast-actions { flex: none; display: flex; gap: 8px; }
+.toast-actions:empty { display: none; }
+.toast-action.is-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; padding: 0; }
+.toast-action.is-icon svg { width: 20px; height: 20px; }
+.toast-action.is-secondary { background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-strong); }
+.toast-action:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+.toast-timer { flex-basis: 100%; height: 3px; border-radius: 2px; background: var(--surface-strong); overflow: hidden; }
+.toast-timer-fill { height: 100%; background: var(--novice-soft); transform-origin: left; }
+
+/* Check badge: the novice's Got it */
+.check-fill { fill: var(--novice); }
+.check-mark { stroke: var(--label-bg); }
 
 /* Progress bar: label above an 8 px track. Set the fill's width (0–100%). */
 .progress-label { margin-bottom: 8px; font: 500 14px/1.2 var(--font-ui); }
@@ -314,6 +330,17 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .pin-label-arrow svg { display: block; width: 100%; height: 100%; }
 
+/* Acknowledged: the novice's blue on the label, leader, arrow and a check on the head */
+.pin-label.is-acked { border-color: var(--novice); color: var(--novice); }
+.pin-leader.is-acked { stroke: var(--novice); }
+.pin-label-arrow.is-acked { color: var(--novice); }
+.pin-check {
+  position: absolute; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  pointer-events: none;
+}
+.pin-check svg { display: block; width: 100%; height: 100%; }
+.pin-check.is-dim { opacity: var(--dim); }
+
 /* ---- Pin sheet: problem, then fix. Takes the mode bar's slot until sent or cancelled. ---- */
 .pin-sheet {
   position: absolute; left: var(--edge-left); right: var(--edge-right);
@@ -398,6 +425,11 @@ button.chip { cursor: pointer; pointer-events: auto; }
   min-width: 48px; min-height: 48px; padding: 0; z-index: 2;
 }
 .pin-tab svg { width: 20px; height: 20px; }
+.pin-tab-dot {
+  position: absolute; top: 8px; right: 8px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--novice-dot);
+}
+.pin-tab-dot.is-new-pin { background: var(--expert-soft); }
 .pin-drawer {
   position: absolute; right: var(--edge-right); width: var(--pin-drawer-width);
   top: var(--below-chips); bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px));
@@ -430,6 +462,22 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .pin-row-text { min-width: 0; }
 .pin-row-fix { font: 600 15px/1.2 var(--font-ui); }
 .pin-row-problem { color: var(--hud-muted); font: 500 14px/1.35 var(--font-ui); }
+/* Confirmed (blue check badge) or waiting (empty ring), beside the fix */
+.pin-row-status {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 48px; color: var(--hud-muted);
+}
+.pin-row-status svg { width: 16px; height: 16px; }
+/* The 16 px ring/check keeps a 44 × 48 px target in both novice states. */
+.pin-row-confirm {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 48px; padding: 0; border: none; border-radius: 10px;
+  background: transparent; color: var(--hud-muted); cursor: pointer;
+}
+.pin-row.is-selected .pin-row-confirm { color: var(--novice-soft); }
+.pin-row-confirm.is-confirmed { cursor: default; }
+.pin-row-confirm svg { width: 16px; height: 16px; }
+.pin-row-confirm:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
 /* Remove: icon only, top-right of the row */
 .pin-row-remove {
   flex: none; display: inline-flex; align-items: center; justify-content: center;

@@ -26,11 +26,17 @@ let hudRoot = null;
 let toast = null;
 let toastTitle = null;
 let toastBody = null;
+let toastActions = null;
+let toastBar = null;
+let toastFill = null;
 let toastTimer = 0;
+let toastAnim = null;
+let toastOnClose = null;
 let pill = null;
 let pillText = null;
 let pillAction = null;
 let pillTimer = 0;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
@@ -138,23 +144,56 @@ function makeToast(hud) {
   toastTitle = el("div", "toast-title");
   toastBody = el("div", "toast-body");
   text.append(toastTitle, toastBody);
-  toast.append(text);
+  toastActions = el("div", "toast-actions");
+  toastBar = el("div", "toast-timer");
+  toastFill = el("div", "toast-timer-fill");
+  toastBar.appendChild(toastFill);
+  toast.append(text, toastActions, toastBar);
   toast.addEventListener("beforexrselect", (e) => e.preventDefault());
+  toast.addEventListener("keydown", (e) => e.stopPropagation());
   toast.hidden = true;
   hud.appendChild(toast);
 }
 
 // Short message for both roles: one bold line + optional short line.
 // Stays until hideToast(), or for ms milliseconds when given.
-export function showToast(title, body = "", ms = 0) {
+// actions: [{ icon, label, primary, onClick }], square icon buttons on the right
+// (label is for screen readers). timer: a bar draining over ms. onClose runs once,
+// when this toast hides or another replaces it.
+export function showToast(title, body = "", ms = 0, { actions = [], timer = false, onClose = null } = {}) {
   if (!toast) return;
-  clearTimeout(toastTimer);
+  endToast();
   toastTitle.textContent = title;
   toastBody.textContent = body;
   toastBody.hidden = !body;
+  toast.classList.toggle("has-actions", actions.length > 0);
+  toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
+    const b = el("button", `toast-action is-icon${primary ? "" : " is-secondary"}`);
+    b.type = "button";
+    b.innerHTML = icon;
+    b.setAttribute("aria-label", text);
+    b.addEventListener("click", onClick);
+    return b;
+  }));
+  const bar = timer && ms > 0 && !reducedMotion.matches;
+  toastBar.hidden = !bar;
+  if (bar) {
+    toastAnim = toastFill.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
+      { duration: ms, easing: "linear", fill: "forwards" });
+  }
+  toastOnClose = onClose;
   toast.hidden = false;
   layoutBottom();
   if (ms) toastTimer = setTimeout(hideToast, ms);
+}
+
+function endToast() {
+  clearTimeout(toastTimer);
+  toastAnim?.cancel();
+  toastAnim = null;
+  const onClose = toastOnClose;
+  toastOnClose = null;
+  onClose?.();
 }
 
 // Pin sheet: hide the mode bar and crosshair while it has their slot
@@ -172,7 +211,7 @@ export function setHint(text) {
 
 export function hideToast() {
   if (!toast) return;
-  clearTimeout(toastTimer);
+  endToast();
   toast.hidden = true;
   layoutBottom();
 }

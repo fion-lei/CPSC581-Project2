@@ -1,13 +1,16 @@
-import { PROBLEMS, FIXES, fixText, valueText } from "./pin-labels.js";
+import { PROBLEMS, FIXES, fixText, valueText, CHECK_BADGE } from "./pin-labels.js";
 import { layoutBottom, hideToast, setToolsHidden } from "./hud.js";
 
 // Inline icons: 2 px stroke, round caps (docs/DESIGN.md)
-const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+export const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 // Thumbtack (Lucide "pin", ISC licence)
 const PIN_ICON = icon("<path d='M12 17v5'/><path d='M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z'/>");
 const CLOSE_ICON = icon("<path d='M6 6l12 12M18 6L6 18'/>");
 const TRASH_ICON = icon("<path d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/>");
+export const CHECK_ICON = icon("<path d='M5 12.5l4.5 4.5L19 7.5'/>");
+// Waiting for the novice: an empty ring the size of the check badge
+const WAIT_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="6"/></svg>`;
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -28,11 +31,18 @@ function shield(e) {
   e.addEventListener("keydown", (ev) => ev.stopPropagation());
 }
 
-// Expert, Pin mode: a tab on the right edge opens a drawer listing every pin.
-// Selecting a row highlights its pin in the scene; the icon on the row removes it.
-export function createPinDrawer(hud, { onSelect, onRemove, onRemoveAll, onClose }) {
+// A tab on the right edge opens a drawer listing every pin. Selecting a row highlights
+// its pin in the scene. Each row shows whether the novice confirmed it (blue check).
+// Expert (Pin mode): the trash icon removes a pin. Novice: no removing; a waiting
+// pin has a check button instead. isNovice() is read on each render: the role is
+// only known once in a room.
+export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll, onAck, onOpen, onClose }) {
   const tab = button("btn pin-tab");
   tab.innerHTML = PIN_ICON;
+  // Expert: new confirmations; novice: pins still waiting to be confirmed
+  const dot = el("span", "pin-tab-dot");
+  dot.hidden = true;
+  tab.appendChild(dot);
 
   const drawer = el("div", "pin-drawer");
   drawer.setAttribute("role", "dialog");
@@ -55,6 +65,12 @@ export function createPinDrawer(hud, { onSelect, onRemove, onRemoveAll, onClose 
   let visible = false; // Pin mode and the tools are showing
   let open = false;
 
+  function setOpen(on) {
+    open = on;
+    apply();
+    if (on && visible) onOpen?.();
+  }
+
   function apply() {
     tab.hidden = !visible || open;
     drawer.hidden = !visible || !open;
@@ -68,16 +84,20 @@ export function createPinDrawer(hud, { onSelect, onRemove, onRemoveAll, onClose 
     onClose();
   }
 
-  tab.addEventListener("click", () => { open = true; apply(); });
+  tab.addEventListener("click", () => setOpen(true));
   close.addEventListener("click", dismiss);
   removeAll.addEventListener("click", onRemoveAll);
 
   // pins: sent pins in placement order; selectedId: the highlighted one, or null
   function render(pins, selectedId) {
+    const novice = isNovice();
+    // The dot is in the colour of whoever is waiting on you: the expert's pins
+    // (orange, novice tab) or the novice's confirmations (blue, expert tab)
+    dot.classList.toggle("is-new-pin", novice);
     tab.setAttribute("aria-label", `Pins (${pins.length})`);
     title.textContent = `Pins · ${pins.length}`;
     empty.hidden = pins.length > 0;
-    removeAll.hidden = pins.length === 0;
+    removeAll.hidden = novice || pins.length === 0;
     rows.replaceChildren(...pins.map((pin) => {
       const selected = pin.id === selectedId;
       const row = el("li", `pin-row${selected ? " is-selected" : ""}`);
@@ -89,11 +109,34 @@ export function createPinDrawer(hud, { onSelect, onRemove, onRemoveAll, onClose 
       if (pin.fix) text.appendChild(el("div", "pin-row-problem", PROBLEMS[pin.problem].name));
       main.append(el("span", "pin-badge", String(pin.no)), text);
       main.addEventListener("click", () => onSelect(pin.id));
+      row.appendChild(main);
+      if (novice) {
+        if (!pin.acked) {
+          const confirm = button("pin-row-confirm");
+          confirm.setAttribute("aria-label", `Confirm pin ${pin.no}`);
+          confirm.innerHTML = WAIT_ICON;
+          confirm.addEventListener("click", () => onAck(pin.id));
+          row.appendChild(confirm);
+        } else {
+          const status = el("span", "pin-row-confirm is-confirmed");
+          status.setAttribute("role", "img");
+          status.setAttribute("aria-label", "Confirmed by the novice");
+          status.innerHTML = CHECK_BADGE;
+          row.appendChild(status);
+        }
+        return row;
+      }
+      const status = el("span", `pin-row-status${pin.acked ? " is-acked" : ""}`);
+      status.setAttribute("role", "img");
+      status.setAttribute("aria-label", pin.acked ? "Confirmed by the novice" : "Waiting for the novice");
+      status.innerHTML = pin.acked ? CHECK_BADGE : WAIT_ICON;
+      row.appendChild(status);
+      if (novice) return row;
       const remove = button("pin-row-remove");
       remove.setAttribute("aria-label", `Remove pin ${pin.no}`);
       remove.innerHTML = TRASH_ICON;
       remove.addEventListener("click", () => onRemove(pin.id));
-      row.append(main, remove);
+      row.append(remove);
       return row;
     }));
   }
@@ -105,7 +148,8 @@ export function createPinDrawer(hud, { onSelect, onRemove, onRemoveAll, onClose 
       visible = on;
       apply();
     },
-    openDrawer() { open = true; apply(); },
+    setDot(on) { dot.hidden = !on; },
+    openDrawer() { setOpen(true); },
     close() { open = false; apply(); },
     dismiss,
     isOpen: () => visible && open,
