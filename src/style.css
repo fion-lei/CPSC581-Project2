@@ -31,6 +31,11 @@
   --edge-left: calc(env(safe-area-inset-left) + 16px);
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Pins (read by src/tokens.js): dimmed / behind-the-part opacity, label and drawer sizes */
+  --dim: 0.4;
+  --pin-label-max: 200px;
+  --pin-drawer-width: min(220px, 60vw);
 }
 
 html, body {
@@ -273,6 +278,104 @@ button.chip { cursor: pointer; pointer-events: auto; }
   font: 600 15px/1 var(--font-ui); cursor: pointer;
 }
 .pill-action:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.has-pin-drawer .pill { right: calc(var(--edge-right) + var(--pin-drawer-width) + 8px); }
+
+/* ---- Pin labels: flat cards tied to their pin by a leader. pin-labels.js positions them. ---- */
+.pin-leaders {
+  position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
+}
+.pin-leader {
+  fill: none; stroke: var(--expert); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.pin-leader.is-behind { stroke-dasharray: 4 4; }
+.pin-leader.is-behind, .pin-leader.is-dim { opacity: var(--dim); }
+.pin-label {
+  position: absolute; left: 0; top: 0; box-sizing: border-box; max-width: var(--pin-label-max);
+  padding: 4px 8px; border: 2px solid var(--expert); border-radius: 8px;
+  background: var(--label-bg); color: var(--expert-strong);
+  font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap; pointer-events: auto; cursor: pointer;
+}
+.pin-label.is-card { padding: 8px 10px; white-space: normal; }
+.pin-label-card, .pin-label.is-card .pin-label-chip { display: none; }
+.pin-label.is-card .pin-label-card { display: block; }
+.pin-label-fix {
+  margin-top: 2px; color: var(--ink);
+  font: 600 15px/1.2 var(--font-ui); letter-spacing: 0; text-transform: none;
+}
+.pin-label-where {
+  margin-top: 2px; color: var(--ink);
+  font: 500 12px/1.3 var(--font-ui); letter-spacing: 0; text-transform: none;
+}
+.pin-label.is-behind, .pin-label.is-dim { opacity: var(--dim); }
+.pin-label-arrow {
+  position: absolute; left: 0; top: 0; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+  color: var(--expert); pointer-events: none;
+}
+.pin-label-arrow svg { display: block; width: 100%; height: 100%; }
+
+/* ---- Pin sheet: problem, then fix. Takes the mode bar's slot until sent or cancelled. ---- */
+.pin-sheet {
+  position: absolute; left: var(--edge-left); right: var(--edge-right);
+  bottom: var(--edge-bottom); max-width: 440px; margin: 0 auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 12px; padding: 12px;
+  border-radius: 14px; background: var(--hud); pointer-events: auto; z-index: 2;
+}
+.pin-sheet-handle {
+  align-self: center; width: 36px; height: 4px; margin-top: -4px;
+  border-radius: 2px; background: var(--surface-strong);
+}
+/* Row 1: title (or back), step, close. With back showing, the title drops to row 2. */
+.pin-sheet-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 4px;
+  margin: -8px -8px 0 0;
+}
+.pin-sheet-back {
+  grid-row: 1; grid-column: 1; justify-self: start; min-height: 48px; margin-left: -4px; padding: 0 4px;
+  border: none; background: transparent; color: var(--hud-muted);
+  font: 500 14px/1 var(--font-ui); cursor: pointer;
+}
+.pin-sheet-title { grid-row: 1; grid-column: 1; font: 600 15px/1.2 var(--font-ui); }
+.pin-sheet-back:not([hidden]) ~ .pin-sheet-title { grid-row: 2; grid-column: 1 / -1; }
+.pin-sheet-step {
+  grid-row: 1; grid-column: 2; color: var(--hud-muted);
+  font: 500 12px/1 var(--font-mono); letter-spacing: 0.06em;
+}
+.pin-sheet-close {
+  grid-row: 1; grid-column: 3; display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; padding: 0; border: none; border-radius: 10px;
+  background: transparent; color: var(--hud-text); cursor: pointer;
+}
+.pin-sheet-close svg { width: 20px; height: 20px; }
+.pin-sheet-close:focus-visible { outline: 2px solid var(--hud-text); outline-offset: -2px; }
+.pin-sheet-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* An odd last choice ("Look here") spans the row */
+.pin-sheet-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.pin-sheet-list { display: flex; flex-direction: column; gap: 8px; }
+.pin-choice {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px;
+  box-sizing: border-box; min-height: 56px; padding: 8px 12px; border: none; border-radius: 10px;
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-strong);
+  color: var(--hud-text); font: 600 15px/1.2 var(--font-ui); text-align: left; cursor: pointer;
+  transition: box-shadow 150ms var(--ease-out);
+}
+.pin-choice.is-selected { box-shadow: inset 0 0 0 2px var(--expert); }
+.pin-choice:focus-visible, .pin-sheet-back:focus-visible, .pin-fix-name:focus-visible {
+  outline: 2px solid var(--hud-text); outline-offset: 2px;
+}
+.pin-choice-note {
+  color: var(--expert); font: 500 12px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase;
+}
+.pin-fix { align-items: stretch; padding: 0 8px 8px; gap: 0; }
+.pin-fix:not(.is-selected) { padding-bottom: 0; }
+.pin-fix-name {
+  min-height: 48px; padding: 0 4px; border: none; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.pin-values .segment { min-height: 44px; }
+.pin-sheet-foot { display: flex; gap: 8px; }
+.pin-sheet-foot .btn { flex: 1; min-width: 0; padding: 0 8px; }
+.pin-sheet-foot .btn:disabled { background: var(--surface-strong); }
 
 /* Hold hint, centred just above the mode bar */
 .pin-hint {
@@ -280,3 +383,65 @@ button.chip { cursor: pointer; pointer-events: auto; }
   transform: translateX(-50%); width: max-content;
   max-width: calc(100% - var(--edge-left) - var(--edge-right)); padding: 10px 14px; text-align: center;
 }
+
+/* Draft (not sent): dark chip, then a dashed live preview */
+.pin-label.is-draft { border-color: transparent; background: var(--hud); color: var(--hud-text); }
+.pin-label.is-preview { border-style: dashed; }
+
+/* Destructive: outlined, no red (red is the connection dot only) */
+.btn.is-destructive { gap: 6px; background: transparent; box-shadow: inset 0 0 0 1px var(--hud-muted); }
+.btn svg { flex: none; width: 16px; height: 16px; }
+
+/* ---- Pin tab and drawer: expert, Pin mode, right edge ---- */
+.pin-tab {
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  min-width: 48px; min-height: 48px; padding: 0; z-index: 2;
+}
+.pin-tab svg { width: 20px; height: 20px; }
+.pin-drawer {
+  position: absolute; right: var(--edge-right); width: var(--pin-drawer-width);
+  top: var(--below-chips); bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px));
+  display: flex; flex-direction: column; box-sizing: border-box; padding: 8px;
+  border-radius: 14px; background: var(--hud); pointer-events: auto; z-index: 2;
+}
+.pin-drawer-head { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
+.pin-drawer-head .field-label { margin: 0; }
+.pin-icon-button { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
+.pin-rows {
+  flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pin-row {
+  display: flex; align-items: flex-start; border-radius: 10px;
+  transition: background-color 150ms var(--ease-out);
+}
+.pin-row.is-selected { background: var(--surface); }
+.pin-row-main {
+  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; box-sizing: border-box;
+  min-height: 48px; padding: 8px; border: none; border-radius: 10px;
+  background: transparent; color: var(--hud-text); text-align: left; cursor: pointer;
+}
+.pin-row-main:focus-visible { outline: 2px solid var(--hud-text); outline-offset: -2px; }
+.pin-badge {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--expert); color: var(--hud-text); font: 500 12px/1 var(--font-mono);
+}
+.pin-row-text { min-width: 0; }
+.pin-row-fix { font: 600 15px/1.2 var(--font-ui); }
+.pin-row-problem { color: var(--hud-muted); font: 500 14px/1.35 var(--font-ui); }
+/* Remove: icon only, top-right of the row */
+.pin-row-remove {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; padding: 0; border: none; border-radius: 10px;
+  background: transparent; color: var(--hud-muted); cursor: pointer;
+}
+.pin-row-remove svg { width: 18px; height: 18px; }
+.pin-row-remove:focus-visible { outline: 2px solid var(--hud-text); outline-offset: -2px; }
+.pin-empty { margin: 0; padding: 8px; color: var(--hud-muted); font: 500 14px/1.35 var(--font-ui); }
+.pin-remove-all {
+  align-self: center; min-height: 44px; padding: 0 12px; border: none; background: transparent;
+  color: var(--hud-muted); font: 500 14px/1 var(--font-ui); text-decoration: underline;
+  cursor: pointer; pointer-events: auto;
+}
+.pin-remove-all:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }

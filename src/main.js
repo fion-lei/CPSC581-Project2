@@ -40,11 +40,14 @@ onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
-  // The novice (re)joined: give it every pin placed so far
+  // The novice (re)joined: give it every pin placed so far. The expert's hello
+  // comes first on the same ordered channel, so the novice clears, then refills.
   if (getRole() === "expert") pins.resend();
+  else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
+on("unpin", pins.removeRemote);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {
