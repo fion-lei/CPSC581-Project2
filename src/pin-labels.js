@@ -56,6 +56,13 @@ const ELBOW_X = 12;   // px; the leader turns horizontal here
 const RISE = 28;      // px from the pin head up to the label's bottom edge
 const ARROW_GAP = 8;  // px between an off-screen label and its arrow
 const BEHIND_EPS = 0.003; // m; part hits this close to the head don't hide it
+const CROWD_PX = 64;      // heads closer than this on screen crowd each other
+const CROWD_EXIT_PX = 80; // ...and stay crowded until this far apart, so nothing flickers
+const STACK_GAP = 6;      // px between stacked labels
+const EASE = 0.3;         // per frame, toward a label's new spot
+const MERGE_ROUNDS = 3;   // columns that overlap are merged at most this often
+
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 const SVG = "http://www.w3.org/2000/svg";
 const ARROW = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 5 L0 10 Z" fill="currentColor"/></svg>`;
@@ -110,7 +117,8 @@ export function createPinLabels(hud, { onTap }) {
     leaders.appendChild(leader);
     hud.insertBefore(root, bounds.nextSibling);
     hud.insertBefore(arrow, root.nextSibling);
-    const label = { pin, root, chip, problem, fix, where, arrow, leader, expanded: false, key: "" };
+    const label = { pin, root, chip, problem, fix, where, arrow, leader,
+      expanded: false, key: "", crowded: false, pos: null };
     labels.set(pin.id, label);
   }
 
@@ -173,9 +181,9 @@ export function createPinLabels(hud, { onTap }) {
     const box = bounds.getBoundingClientRect();
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const placed = [];
+    const entries = [];
 
-    // Pass 1: state and classes (writes only)
+    // Pass 1: project each head, set state classes (writes only)
     for (const label of labels.values()) {
       const { pin } = label;
       if (label.key !== textKey(pin)) setText(label);
@@ -184,6 +192,8 @@ export function createPinLabels(hud, { onTap }) {
       if (!visible) {
         label.arrow.hidden = true;
         label.leader.setAttribute("visibility", "hidden");
+        label.pos = null;
+        label.crowded = false;
         continue;
       }
       pin.head.getWorldPosition(head);
@@ -202,58 +212,199 @@ export function createPinLabels(hud, { onTap }) {
       const editing = pin.edit !== undefined;
       label.root.classList.toggle("is-draft", editing && !pin.edit);
       label.root.classList.toggle("is-preview", editing && !!pin.edit);
-      label.root.classList.toggle("is-card",
-        !off && (editing ? !!pin.edit : label.expanded || selected || dist <= NEAR_M));
       label.root.classList.toggle("is-behind", behind);
       label.root.classList.toggle("is-dim", dim);
       label.leader.classList.toggle("is-behind", behind);
       label.leader.classList.toggle("is-dim", dim);
-      placed.push({ label, x, y, off, behindCam });
+      entries.push({ label, x, y, dist, off, behindCam, selected, editing });
+    }
+
+    // Heads close together on screen crowd each other: their labels collapse to chips
+    // and stack (below)
+    const onScreen = entries.filter((e) => !e.off);
+    const offScreen = entries.filter((e) => e.off);
+    const clusters = clusterHeads(onScreen);
+    for (const cluster of clusters) {
+      for (const e of cluster) e.label.crowded = cluster.length > 1;
+    }
+    for (const e of offScreen) e.label.crowded = false;
+
+    // Chip or card. In a crowd only the edited, selected or tapped label stays a card.
+    for (const e of entries) {
+      const { label } = e;
+      label.root.classList.toggle("is-card", !e.off && (e.editing ? !!label.pin.edit
+        : label.expanded || e.selected || (!label.crowded && e.dist <= NEAR_M)));
     }
 
     // Pass 2: sizes (reads only), then positions (writes only)
-    for (const p of placed) {
-      p.lw = p.label.root.offsetWidth;
-      p.lh = p.label.root.offsetHeight;
+    for (const e of entries) {
+      e.lw = e.label.root.offsetWidth;
+      e.lh = e.label.root.offsetHeight;
     }
-    for (const { label, x, y, off, behindCam, lw, lh } of placed) {
-      if (off) placeOffscreen(label, x, y, behindCam, lw, lh, box);
-      else placeBeside(label, x, y, lw, lh, box);
+    layoutStacks(clusters, box);
+    layoutOffscreen(offScreen, box);
+    const snap = reducedMotion.matches;
+    for (const e of onScreen) drawBeside(e, snap);
+    for (const e of offScreen) drawOffscreen(e, snap);
+  }
+
+  // Single-link groups of heads closer than CROWD_PX on screen. A pair that is already
+  // crowded stays linked until CROWD_EXIT_PX, so labels don't flicker at the edge.
+  function clusterHeads(entries) {
+    const parent = entries.map((_, i) => i);
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i];
+        const b = entries[j];
+        const limit = a.label.crowded && b.label.crowded ? CROWD_EXIT_PX : CROWD_PX;
+        if (Math.hypot(a.x - b.x, a.y - b.y) < limit) parent[find(i)] = find(j);
+      }
+    }
+    const groups = new Map();
+    entries.forEach((e, i) => {
+      const root = find(i);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(e);
+    });
+    return [...groups.values()];
+  }
+
+  // Each cluster becomes a column of labels beside it (one label: today's spot).
+  // Columns that still overlap each other are merged into one and laid out again.
+  function layoutStacks(clusters, box) {
+    let groups = clusters;
+    for (let round = 0; round <= MERGE_ROUNDS; round++) {
+      const rects = groups.map((g) => placeColumn(g, box));
+      const pair = round < MERGE_ROUNDS && overlappingPair(rects);
+      if (!pair) return;
+      const [i, j] = pair;
+      groups = groups.filter((_, k) => k !== i && k !== j).concat([groups[i].concat(groups[j])]);
     }
   }
 
-  // Up and to the right of the head (left if it would run off screen), with an elbow
-  // leader from the head to the label's nearest bottom corner
-  function placeBeside(label, x, y, lw, lh, box) {
-    const side = x + OFFSET_X + lw > box.right ? -1 : 1;
-    const top = Math.max(box.top, y - RISE - lh);
-    const left = side > 0 ? x + OFFSET_X : x - OFFSET_X - lw;
-    const cornerY = top + lh;
-    label.root.style.transform = `translate(${left}px, ${top}px)`;
+  function overlappingPair(rects) {
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        if (rects[i].some((a) => rects[j].some((b) => a.l < b.r + STACK_GAP && b.l < a.r + STACK_GAP
+          && a.t < b.b + STACK_GAP && b.t < a.b + STACK_GAP))) return [i, j];
+      }
+    }
+    return null;
+  }
+
+  // Ordered by head height so leaders don't cross. Too tall for the screen: the
+  // second half goes in a column on the other side. Returns the column rectangles.
+  function placeColumn(group, box) {
+    const sorted = [...group].sort((a, b) => a.y - b.y);
+    const height = sorted.reduce((sum, e) => sum + e.lh + STACK_GAP, -STACK_GAP);
+    if (sorted.length > 1 && height > box.bottom - box.top) {
+      const half = Math.ceil(sorted.length / 2);
+      return [stack(sorted.slice(0, half), box, 1), stack(sorted.slice(half), box, -1)];
+    }
+    return [stack(sorted, box, 0)];
+  }
+
+  // One column: right of the rightmost head (left of the leftmost if it won't fit),
+  // labels lined up on the column edge, each as high as its head allows, STACK_GAP apart
+  function stack(list, box, forceSide) {
+    const maxX = Math.max(...list.map((e) => e.x));
+    const minX = Math.min(...list.map((e) => e.x));
+    const widest = Math.max(...list.map((e) => e.lw));
+    const side = forceSide || (maxX + OFFSET_X + widest > box.right ? -1 : 1);
+    const edge = side > 0 ? maxX + OFFSET_X : minX - OFFSET_X;
+    let bottom = -Infinity;
+    for (const e of list) {
+      e.top = Math.max(e.y - RISE - e.lh, bottom + STACK_GAP);
+      bottom = e.top + e.lh;
+    }
+    // Keep the column on screen: up if it runs off the bottom, then down to the top
+    const shift = Math.max(Math.min(0, box.bottom - bottom), box.top - list[0].top);
+    for (const e of list) {
+      e.top += shift;
+      e.side = side;
+      e.left = side > 0 ? edge : edge - e.lw;
+    }
+    return {
+      l: side > 0 ? edge : edge - widest, r: side > 0 ? edge + widest : edge,
+      t: list[0].top, b: bottom + shift,
+    };
+  }
+
+  // Ease toward the target spot; snap when just shown or with reduced motion
+  function moveTo(label, x, y, snap) {
+    if (!label.pos || snap) label.pos = { x, y };
+    else {
+      label.pos.x += (x - label.pos.x) * EASE;
+      label.pos.y += (y - label.pos.y) * EASE;
+    }
+    label.root.style.transform = `translate(${label.pos.x}px, ${label.pos.y}px)`;
+    return label.pos;
+  }
+
+  // Elbow leader from the head to the label's near bottom corner, which sits on the
+  // column edge
+  function drawBeside({ label, x, y, side, left, top, lw, lh }, snap) {
+    const pos = moveTo(label, left, top, snap);
+    const cornerY = pos.y + lh;
+    const cornerX = side > 0 ? pos.x : pos.x + lw;
     label.arrow.hidden = true;
     label.leader.setAttribute("points",
-      `${x},${y} ${x + side * ELBOW_X},${cornerY} ${x + side * OFFSET_X},${cornerY}`);
+      `${x},${y} ${x + side * ELBOW_X},${cornerY} ${cornerX},${cornerY}`);
     label.leader.setAttribute("visibility", "visible");
   }
 
-  // Clamped to the edge of the safe area, on the line from the screen centre toward
-  // the pin, with an arrow on the side facing it
-  function placeOffscreen(label, x, y, behindCam, lw, lh, box) {
+  // Off-screen chips: clamped to the edge of the safe area on the line from the screen
+  // centre toward the pin, then spread along that edge so they don't pile up
+  function layoutOffscreen(list, box) {
     const cx = (box.left + box.right) / 2;
     const cy = (box.top + box.bottom) / 2;
-    // Behind the camera the projection is mirrored through the centre
-    let dx = behindCam ? cx - x : x - cx;
-    let dy = behindCam ? cy - y : y - cy;
-    const len = Math.hypot(dx, dy) || 1;
-    dx /= len;
-    dy /= len;
-    const halfW = Math.max(0, (box.right - box.left) / 2 - lw / 2 - ARROW_GAP - 5);
-    const halfH = Math.max(0, (box.bottom - box.top) / 2 - lh / 2 - ARROW_GAP - 5);
-    const t = Math.min(dx ? halfW / Math.abs(dx) : Infinity, dy ? halfH / Math.abs(dy) : Infinity);
-    const lx = cx + dx * t;
-    const ly = cy + dy * t;
-    label.root.style.transform = `translate(${lx - lw / 2}px, ${ly - lh / 2}px)`;
-    // Arrow just outside the label's border, along the same line
+    const edges = { left: [], right: [], top: [], bottom: [] };
+    for (const e of list) {
+      // Behind the camera the projection is mirrored through the centre
+      let dx = e.behindCam ? cx - e.x : e.x - cx;
+      let dy = e.behindCam ? cy - e.y : e.y - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      const halfW = Math.max(0, (box.right - box.left) / 2 - e.lw / 2 - ARROW_GAP - 5);
+      const halfH = Math.max(0, (box.bottom - box.top) / 2 - e.lh / 2 - ARROW_GAP - 5);
+      const tx = dx ? halfW / Math.abs(dx) : Infinity;
+      const ty = dy ? halfH / Math.abs(dy) : Infinity;
+      const t = Math.min(tx, ty);
+      Object.assign(e, { dx, dy, cx: cx + dx * t, cy: cy + dy * t });
+      if (tx <= ty) edges[dx < 0 ? "left" : "right"].push(e);
+      else edges[dy < 0 ? "top" : "bottom"].push(e);
+    }
+    const lo = (size) => ARROW_GAP + 5 + size / 2;
+    spread(edges.left, "cy", "lh", box.top, box.bottom, lo);
+    spread(edges.right, "cy", "lh", box.top, box.bottom, lo);
+    spread(edges.top, "cx", "lw", box.left, box.right, lo);
+    spread(edges.bottom, "cx", "lw", box.left, box.right, lo);
+  }
+
+  // 1-D version of the column sweep, along one screen edge
+  function spread(list, axis, size, min, max, margin) {
+    if (!list || list.length < 2) return;
+    list.sort((a, b) => a[axis] - b[axis]);
+    let end = -Infinity;
+    for (const e of list) {
+      e[axis] = Math.max(e[axis], end + STACK_GAP + e[size] / 2);
+      end = e[axis] + e[size] / 2;
+    }
+    // Back inside the edge's range: up/left if the last runs past it, then down/right
+    const last = list[list.length - 1];
+    const over = last[axis] - (max - margin(last[size]));
+    if (over > 0) for (const e of list) e[axis] -= over;
+    const under = min + margin(list[0][size]) - list[0][axis];
+    if (under > 0) for (const e of list) e[axis] += under;
+  }
+
+  function drawOffscreen({ label, dx, dy, cx, cy, lw, lh }, snap) {
+    const pos = moveTo(label, cx - lw / 2, cy - lh / 2, snap);
+    // Arrow just outside the label's border, on the side facing the pin
+    const lx = pos.x + lw / 2;
+    const ly = pos.y + lh / 2;
     const s = Math.min(dx ? lw / 2 / Math.abs(dx) : Infinity, dy ? lh / 2 / Math.abs(dy) : Infinity) + ARROW_GAP;
     label.arrow.style.transform =
       `translate(${lx + dx * s}px, ${ly + dy * s}px) rotate(${Math.atan2(dy, dx)}rad)`;
