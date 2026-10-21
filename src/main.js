@@ -32,7 +32,7 @@ controls.target.set(0, 0.07, 0);
 controls.enableDamping = true;
 controls.update();
 
-const pins = initPins({ expertGhost: ghosts.expert.object, send });
+const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
 
 initAR();
 initDebug();
@@ -47,10 +47,15 @@ on("hello", (msg) => {
   const saved = getSavedPose();
   if (msg.role === "novice" && saved) send({ t: "viewpoint", p: saved.p, q: saved.q });
   // The novice (re)joined: give it every pin placed so far
+  // The novice (re)joined: give it every pin placed so far. The expert's hello
+  // comes first on the same ordered channel, so the novice clears, then refills.
   if (getRole() === "expert") pins.resend();
+  else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
+on("unpin", pins.removeRemote);
+on("ack", pins.onAck);
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
 
 onSessionStart(() => {

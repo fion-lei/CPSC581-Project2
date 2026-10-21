@@ -20,11 +20,23 @@ let toolbar = null;
 let crosshair = null;
 let aimReady = false;
 let aimHit = false;
+let toolsHidden = false; // the pin sheet has the mode bar's slot
+let hint = null;
 let hudRoot = null;
 let toast = null;
 let toastTitle = null;
 let toastBody = null;
+let toastActions = null;
+let toastBar = null;
+let toastFill = null;
 let toastTimer = 0;
+let toastAnim = null;
+let toastOnClose = null;
+let pill = null;
+let pillText = null;
+let pillAction = null;
+let pillTimer = 0;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
@@ -67,6 +79,7 @@ function join(role, code) {
   peerRole = null;
   setMode("view");
   hideToast();
+  hidePill();
   if (joined) net.connect(role, code);
   render();
 }
@@ -100,15 +113,26 @@ function render() {
 function renderTools() {
   if (!toolbar) return;
   const visible = inScene && joined?.role === "expert" && aimReady;
-  toolbar.hidden = crosshair.hidden = !visible;
+  toolbar.hidden = crosshair.hidden = !visible || toolsHidden;
+  if (hint && !visible) hint.hidden = true;
   layoutBottom();
 }
 
-// Stack from the bottom: mode bar, toast, then the AR and placement controls.
-function layoutBottom() {
+// Tallest visible element of a slot, plus the gap above it
+function slotSpace(selector) {
+  let space = 0;
+  for (const e of hudRoot.querySelectorAll(selector)) {
+    if (!e.hidden) space = Math.max(space, e.offsetHeight + BOTTOM_GAP);
+  }
+  return space;
+}
+
+// Stack from the bottom: mode bar (or pin sheet), toast, then the AR and placement
+// controls. Call again when something in either slot shows, hides or resizes.
+export function layoutBottom() {
   if (!toolbar || !toast) return;
-  const toolbarSpace = toolbar.hidden ? 0 : toolbar.offsetHeight + BOTTOM_GAP;
-  const toastSpace = toast.hidden ? 0 : toast.offsetHeight + BOTTOM_GAP;
+  const toolbarSpace = slotSpace(".bottom-bar");
+  const toastSpace = slotSpace(".toast-area");
   hudRoot.style.setProperty("--toast-offset", `${toolbarSpace}px`);
   hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace}px`);
 }
@@ -120,34 +144,114 @@ function makeToast(hud) {
   toastTitle = el("div", "toast-title");
   toastBody = el("div", "toast-body");
   text.append(toastTitle, toastBody);
-  toast.append(text);
+  toastActions = el("div", "toast-actions");
+  toastBar = el("div", "toast-timer");
+  toastFill = el("div", "toast-timer-fill");
+  toastBar.appendChild(toastFill);
+  toast.append(text, toastActions, toastBar);
   toast.addEventListener("beforexrselect", (e) => e.preventDefault());
+  toast.addEventListener("keydown", (e) => e.stopPropagation());
   toast.hidden = true;
   hud.appendChild(toast);
 }
 
 // Short message for both roles: one bold line + optional short line.
 // Stays until hideToast(), or for ms milliseconds when given.
-export function showToast(title, body = "", ms = 0) {
+// actions: [{ icon, label, primary, onClick }], square icon buttons on the right
+// (label is for screen readers). timer: a bar draining over ms. onClose runs once,
+// when this toast hides or another replaces it.
+export function showToast(title, body = "", ms = 0, { actions = [], timer = false, onClose = null } = {}) {
   if (!toast) return;
-  clearTimeout(toastTimer);
+  endToast();
   toastTitle.textContent = title;
   toastBody.textContent = body;
   toastBody.hidden = !body;
+  toast.classList.toggle("has-actions", actions.length > 0);
+  toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
+    const b = el("button", `toast-action is-icon${primary ? "" : " is-secondary"}`);
+    b.type = "button";
+    b.innerHTML = icon;
+    b.setAttribute("aria-label", text);
+    b.addEventListener("click", onClick);
+    return b;
+  }));
+  const bar = timer && ms > 0 && !reducedMotion.matches;
+  toastBar.hidden = !bar;
+  if (bar) {
+    toastAnim = toastFill.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
+      { duration: ms, easing: "linear", fill: "forwards" });
+  }
+  toastOnClose = onClose;
   toast.hidden = false;
   layoutBottom();
   if (ms) toastTimer = setTimeout(hideToast, ms);
 }
 
+function endToast() {
+  clearTimeout(toastTimer);
+  toastAnim?.cancel();
+  toastAnim = null;
+  const onClose = toastOnClose;
+  toastOnClose = null;
+  onClose?.();
+}
+
+// Pin sheet: hide the mode bar and crosshair while it has their slot
+export function setToolsHidden(on) {
+  toolsHidden = on;
+  renderTools();
+}
+
+// Small pill just above the mode bar while holding in Pin mode; null hides it
+export function setHint(text) {
+  if (!hint) return;
+  if (hint.textContent !== (text ?? "")) hint.textContent = text ?? "";
+  hint.hidden = !text || toolbar.hidden;
+}
+
 export function hideToast() {
   if (!toast) return;
-  clearTimeout(toastTimer);
+  endToast();
   toast.hidden = true;
   layoutBottom();
 }
 
+function makePill(hud) {
+  pill = el("div", "pill");
+  pill.setAttribute("role", "status");
+  pillText = el("span", "pill-text");
+  pillAction = el("button", "pill-action");
+  pillAction.type = "button";
+  pill.append(pillText, pillAction);
+  pill.addEventListener("beforexrselect", (e) => e.preventDefault());
+  pill.addEventListener("keydown", (e) => e.stopPropagation());
+  pill.hidden = true;
+  hud.appendChild(pill);
+}
+
+// White confirmation pill, top-centre: "View sent to novice". With an action
+// ({ label, onClick }) it carries a button, e.g. Undo. Hides after ms.
+export function showPill(text, action = null, ms = 2000) {
+  if (!pill) return;
+  clearTimeout(pillTimer);
+  pillText.textContent = text;
+  pill.classList.toggle("has-action", !!action);
+  pillAction.hidden = !action;
+  pillAction.textContent = action?.label ?? "";
+  pillAction.onclick = action ? () => { hidePill(); action.onClick(); } : null;
+  pill.hidden = false;
+  pillTimer = setTimeout(hidePill, ms);
+}
+
+export function hidePill() {
+  if (!pill) return;
+  clearTimeout(pillTimer);
+  pill.hidden = true;
+  pillAction.onclick = null;
+}
+
 function makeExpertTools(hud) {
-  toolbar = el("div", "expert-toolbar");
+  toolbar = el("div", "expert-toolbar bottom-bar");
   toolbar.setAttribute("role", "toolbar");
   toolbar.setAttribute("aria-label", "Expert tools");
   const buttons = TOOL_MODES.map((mode) => {
@@ -171,7 +275,10 @@ function makeExpertTools(hud) {
   crosshair = el("div", "crosshair expert-crosshair");
   crosshair.setAttribute("aria-hidden", "true");
   toolbar.hidden = crosshair.hidden = true;
-  hud.append(toolbar, crosshair);
+  hint = el("div", "toast pin-hint");
+  hint.setAttribute("role", "status");
+  hint.hidden = true;
+  hud.append(toolbar, crosshair, hint);
 }
 
 // Called each frame with placement/tracking readiness and the centre-ray hit.
@@ -302,6 +409,7 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
     hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
   }).observe(chip);
   makeToast(hud);
+  makePill(hud);
   makeExpertTools(hud);
 
   const params = new URLSearchParams(location.search);
