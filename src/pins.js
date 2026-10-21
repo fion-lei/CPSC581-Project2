@@ -10,6 +10,7 @@ import { tokenColor, tokenNumber } from "./tokens.js";
 import { showToast, showPill, setHint } from "./hud.js";
 import { overhangAngle, fixText, validMark, createPinLabels } from "./pin-labels.js";
 import { createPinDrawer, createPinSheet } from "./pin-drawer.js";
+import { createPinToast } from "./pin-toast.js";
 
 // Pin anatomy in metres (modelPivot space): a small physical object on the part
 const HEAD_R = 0.004;       // 8 mm sphere
@@ -34,7 +35,7 @@ const PIN_FIRST = 0.01;     // m; aiming at a pin wins unless the part is this m
 const SELECTED_SCALE = 1.4; // drawer: the selected pin grows
 const REMOVE_MS = 250;      // removed pins shrink and fade out
 const UNDO_MS = 5000;
-const TOAST_MS = 6000;      // novice pin toasts (#17 keeps them up until Got it)
+const TOAST_MS = 6000;      // novice: "Expert removed a pin"
 const DIM = tokenNumber("--dim");
 const OVERHANG_MIN = 45;    // degrees; a face pointing down more than this suggests Overhang
 const INSIDE_EDGE = 0.01;   // m; a wall this close beside the hit suggests Sharp corner
@@ -116,7 +117,7 @@ function makePin(id, p, n, no = null, mark = null) {
   object.add(mesh(ringFillGeometry, ringFill), mesh(ringGeometry, ring),
     mesh(stemGeometry, stem), head, pulse);
   return { id, no, problem: mark?.problem ?? null, fix: mark?.fix ?? null, value: mark?.value ?? null,
-    p, n, object, head, outline, pulse, hitSphere,
+    acked: false, p, n, object, head, outline, pulse, hitSphere,
     materials: [head_, rim, stem, ring, ringFill], landAt: 0, pulseAt: -Infinity, removedAt: 0 };
 }
 
@@ -156,8 +157,9 @@ function setBeam(line, a, b) {
 
 // Pin mode: press and hold to aim at the crosshair, release to pin the hit point and
 // pick its problem and fix. Aiming at an existing pin and releasing reopens the sheet for it.
-// expertGhost = the ghost object the novice's beam starts from; send = net.js send.
-export function initPins({ expertGhost, send }) {
+// expertGhost = the ghost object the novice's beam starts from; send and getRole from net.js.
+// The novice confirms a pin with a check (ack), which turns it blue on both phones.
+export function initPins({ expertGhost, send, getRole }) {
   const canvas = renderer.domElement;
   const hud = document.getElementById("hud");
   const group = new THREE.Group();
@@ -188,21 +190,30 @@ export function initPins({ expertGhost, send }) {
   let lastNo = 0;
   let selectedId = null; // expert: the pin highlighted from the drawer
   let sheetPin = null;   // expert: the pin the sheet is open for
+  // Novice: id → mark key of every pin we confirmed, kept across a reconnect so an
+  // ack the expert never got (sent while disconnected) goes again
+  const acks = new Map();
+  const isNovice = () => getRole() === "novice";
   let lastTime = performance.now();
 
   const labels = createPinLabels(hud, { onTap: tapLabel });
   const sheet = createPinSheet(hud);
   const drawer = createPinDrawer(hud, {
+    isNovice,
     onSelect: (id) => select(selectedId === id ? null : id),
     onRemove: (id) => removePin(id, { undo: true }),
     onRemoveAll: confirmRemoveAll,
+    onAck: ackLocal,
+    onOpen: openedDrawer,
     onClose: () => select(null),
   });
+  const toast = createPinToast({ onAck: ackLocal, onFind: select });
 
   const canAim = () => ready && getMode() === "pin";
   // Pins that are on both phones (drafts have no number yet), in placement order
   const sentPins = () => [...pins.values()].filter((pin) => pin.no);
   const markOf = ({ problem, fix, value }) => ({ problem, fix, value });
+  const markKey = ({ problem, fix, value }) => `${problem}|${fix}|${value}`;
   // Plain pins and fixes without a value leave those fields out
   function pinMessage({ id, no, p, n, problem, fix, value }) {
     const msg = { t: "pin", id, no, p, n, problem };
@@ -243,7 +254,21 @@ export function initPins({ expertGhost, send }) {
   }
 
   function renderDrawer() {
-    drawer.render(sentPins(), selectedId);
+    const sent = sentPins();
+    drawer.render(sent, selectedId);
+    // Novice: a dot while some pin still waits to be confirmed
+    if (isNovice()) drawer.setDot(sent.some((pin) => !pin.acked));
+  }
+
+  // Expert: the new confirmations are seen, so the dot goes. Novice: the newest
+  // waiting pin is selected (it grows and pulses).
+  function openedDrawer() {
+    if (!isNovice()) {
+      drawer.setDot(false);
+      return;
+    }
+    const waiting = sentPins().filter((pin) => !pin.acked);
+    if (waiting.length) select(waiting[waiting.length - 1].id);
   }
 
   // Drawer selection: the pin grows and pulses, every other pin dims
@@ -316,6 +341,8 @@ export function initPins({ expertGhost, send }) {
           send(pinMessage(pin));
           showPill(`Pin ${pin.no} sent to novice`);
         } else if (changed) {
+          // A new fix needs confirming again
+          pin.acked = false;
           send(pinMessage(pin));
           showPill(`Pin ${pin.no} updated`);
         }
@@ -375,6 +402,16 @@ export function initPins({ expertGhost, send }) {
       for (const pin of sentPins()) removePin(pin.id, { undo: false });
       showPill("All pins removed");
     } }, UNDO_MS);
+  }
+
+  // Novice confirmed a pin: its row gets a blue check, and the tab a dot until the
+  // drawer opens. Unknown ids (removed since) and repeats are ignored.
+  function onAck({ id }) {
+    const pin = pins.get(id);
+    if (!pin?.no || pin.acked) return;
+    pin.acked = true;
+    if (!drawer.isOpen()) drawer.setDot(true);
+    renderDrawer();
   }
 
   // ---- Expert: aiming ----
@@ -488,21 +525,47 @@ export function initPins({ expertGhost, send }) {
 
   // ---- Novice ----
 
+  // Novice: the check, from the pin toast or the drawer. It can't be undone. The pin
+  // turning blue is the only feedback.
+  function ackLocal(id) {
+    const pin = pins.get(id);
+    if (!pin?.no || pin.acked) return;
+    pin.acked = true;
+    acks.set(id, markKey(pin));
+    send({ t: "ack", id });
+    renderDrawer();
+    toast.close(id);
+  }
+
   // Expert → novice: a new pin, a changed fix, or r = 1 for a resend after
-  // reconnecting (no beam, no toast)
-  function addRemote({ id, no, p, n, problem, fix = null, value = null, r }) {
+  // reconnecting (no beam, no toast; a = 1 if we already confirmed it)
+  function addRemote({ id, no, p, n, problem, fix = null, value = null, r, a }) {
     const mark = { problem, fix, value };
     if (!validMark(mark) || !Array.isArray(p) || !Array.isArray(n)) return;
     const known = pins.get(id);
     if (known) {
       if (Object.entries(mark).every(([key, val]) => known[key] === val)) return;
+      // A changed fix needs confirming again
       Object.assign(known, mark);
-      if (!r) showToast("Pin updated", fixText(mark), TOAST_MS);
+      known.acked = false;
+      acks.delete(id);
+      renderDrawer();
+      if (!r) toast.show(known);
       return;
     }
     const pin = addPin(makePin(id, p, n, no, mark), { pulse: !r });
-    if (r) return;
-    showToast("New pin from expert", fixText(mark), TOAST_MS);
+    if (r) {
+      // A confirmation sent while the expert was away never arrived: send it again
+      if (a) pin.acked = true;
+      else if (acks.get(id) === markKey(pin)) {
+        pin.acked = true;
+        send({ t: "ack", id });
+      }
+      renderDrawer();
+      return;
+    }
+    renderDrawer();
+    toast.show(pin);
     const now = performance.now();
     if (!expertGhost.visible) {
       land(pin, now);
@@ -526,13 +589,17 @@ export function initPins({ expertGhost, send }) {
       fadeBeam(now);
     }
     dropPin(pin, now);
+    acks.delete(id);
+    if (selectedId === id) selectedId = null;
+    renderDrawer();
+    // Takes the toast slot, which hides the pin toast if it is showing
     showToast("Expert removed a pin", fixText(pin), TOAST_MS);
   }
 
   // Expert: send every pin again when the novice (re)joins. This is the whole list:
   // the novice clears its pins on the expert's hello (clearRemote) just before.
   function resend() {
-    for (const pin of sentPins()) send({ ...pinMessage(pin), r: 1 });
+    for (const pin of sentPins()) send({ ...pinMessage(pin), r: 1, ...(pin.acked && { a: 1 }) });
   }
 
   // Novice: the expert (re)connected and is about to resend every pin it still has.
@@ -544,6 +611,9 @@ export function initPins({ expertGhost, send }) {
     for (const pin of fading) disposePin(pin);
     fading.clear();
     labels.clear();
+    toast.close();
+    selectedId = null;
+    renderDrawer();
     remotePin = null;
     if (beamState === "remote") beamState = "off";
   }
@@ -602,7 +672,7 @@ export function initPins({ expertGhost, send }) {
     ready = aimReady;
     hit = aimHit;
     if (holding !== null && !canAim()) cancel();
-    drawer.setVisible(canAim() && !sheet.isOpen());
+    drawer.setVisible(isNovice() ? isPlaced() : canAim() && !sheet.isOpen());
 
     aimAtPins(cam);
     if (holding !== null) {
@@ -639,5 +709,5 @@ export function initPins({ expertGhost, send }) {
   }
 
   renderDrawer();
-  return { update, addRemote, removeRemote, resend, clearRemote };
+  return { update, addRemote, removeRemote, resend, clearRemote, onAck };
 }

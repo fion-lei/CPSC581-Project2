@@ -61,11 +61,16 @@ const CROWD_EXIT_PX = 80; // ...and stay crowded until this far apart, so nothin
 const STACK_GAP = 6;      // px between stacked labels
 const EASE = 0.3;         // per frame, toward a label's new spot
 const MERGE_ROUNDS = 3;   // columns that overlap are merged at most this often
+const CHECK_AT = 5;       // px right and up from the head centre to the check badge's centre
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 const SVG = "http://www.w3.org/2000/svg";
 const ARROW = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0 L10 5 L0 10 Z" fill="currentColor"/></svg>`;
+// Confirmed by the novice: --novice circle, white check (colours in style.css)
+export const CHECK_BADGE = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle class="check-fill" cx="8" cy="8" r="8"/>
+  <path class="check-mark" d="M4.8 8.3l2.2 2.2 4.2-4.6" fill="none" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -112,12 +117,17 @@ export function createPinLabels(hud, { onTap }) {
     const arrow = el("div", "pin-label-arrow");
     arrow.innerHTML = ARROW;
     arrow.hidden = true;
+    // Confirmed: a blue check on the pin head, flat on the screen like the label
+    const check = el("div", "pin-check");
+    check.innerHTML = CHECK_BADGE;
+    check.hidden = true;
     const leader = document.createElementNS(SVG, "polyline");
     leader.classList.add("pin-leader");
     leaders.appendChild(leader);
     hud.insertBefore(root, bounds.nextSibling);
     hud.insertBefore(arrow, root.nextSibling);
-    const label = { pin, root, chip, problem, fix, where, arrow, leader,
+    hud.insertBefore(check, root);
+    const label = { pin, root, chip, problem, fix, where, arrow, check, leader,
       expanded: false, key: "", crowded: false, pos: null };
     labels.set(pin.id, label);
   }
@@ -125,6 +135,8 @@ export function createPinLabels(hud, { onTap }) {
   // What the label shows: the pin, or the sheet's edit while the expert picks
   // (pin.edit; null at step 1 of a new pin, which shows the draft chip)
   const shown = (pin) => (pin.edit !== undefined ? pin.edit : pin);
+  // The novice's confirmation shows unless the expert is editing the pin
+  const acked = (pin) => !!pin.acked && pin.edit === undefined;
   const textKey = (pin) => {
     const m = shown(pin);
     return m ? `${pin.no}|${m.problem}|${m.fix}|${m.value}` : `${pin.no}|draft`;
@@ -152,6 +164,7 @@ export function createPinLabels(hud, { onTap }) {
     if (!label) return;
     label.root.remove();
     label.arrow.remove();
+    label.check.remove();
     label.leader.remove();
     labels.delete(id);
   }
@@ -191,6 +204,7 @@ export function createPinLabels(hud, { onTap }) {
       label.root.hidden = !visible;
       if (!visible) {
         label.arrow.hidden = true;
+        label.check.hidden = true;
         label.leader.setAttribute("visibility", "hidden");
         label.pos = null;
         label.crowded = false;
@@ -216,6 +230,15 @@ export function createPinLabels(hud, { onTap }) {
       label.root.classList.toggle("is-dim", dim);
       label.leader.classList.toggle("is-behind", behind);
       label.leader.classList.toggle("is-dim", dim);
+      const confirmed = acked(pin);
+      label.root.classList.toggle("is-acked", confirmed);
+      label.leader.classList.toggle("is-acked", confirmed);
+      label.arrow.classList.toggle("is-acked", confirmed);
+      label.check.hidden = !confirmed || off;
+      if (confirmed && !off) {
+        label.check.classList.toggle("is-dim", behind || dim);
+        label.check.style.transform = `translate(${x + CHECK_AT}px, ${y - CHECK_AT}px)`;
+      }
       entries.push({ label, x, y, dist, off, behindCam, selected, editing });
     }
 
