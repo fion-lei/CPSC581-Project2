@@ -374,7 +374,7 @@ export function initPins({ expertGhost, send, getRole }) {
     });
   }
 
-  // Cancel (or a mode change from a room switch, or the AR session ending): a draft
+  // Cancel (or a mode change from a room switch, Re-place, or the AR session ending): a draft
   // was never sent, so it just goes. The sheet hides the mode bar, so the expert
   // can't switch mode while it is open.
   function closeSheet() {
@@ -692,6 +692,8 @@ export function initPins({ expertGhost, send, getRole }) {
     ready = aimReady;
     hit = aimHit;
     if (holding !== null && !canAim()) cancel();
+    // Re-place hides the part, so a sheet open on it can't stay
+    if (!isPlaced()) closeSheet();
     drawer.setVisible(isNovice() ? isPlaced() : canAim() && !sheet.isOpen());
 
     aimAtPins(cam);
