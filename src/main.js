@@ -48,7 +48,6 @@ on("viewpoint", receiveViewpoint);
 onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
-  if (msg.role === "novice" && saved) send({ t: "viewpoint", p: saved.p, q: saved.q });
   setPeerRole(msg.role);
   if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
