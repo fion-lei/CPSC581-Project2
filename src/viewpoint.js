@@ -211,13 +211,12 @@ export function updateViewpoint(time) {
   const nowAligned = alignmentState(aligned, alignment);
   if (nowAligned !== aligned) {
     setAligned(nowAligned);
-    if (nowAligned) {
-      buzz();
-      if (reportedId !== savedPose.id) {
-        reportedId = savedPose.id;
-        send({ t: "aligned", id: savedPose.id });
-      }
-    }
+    if (nowAligned) buzz();
+  }
+  // Checked every aligned frame, so a report missed while disconnected goes on reconnect
+  if (aligned && reportedId !== savedPose.id && getStatus() === "connected") {
+    reportedId = savedPose.id;
+    send({ t: "aligned", id: savedPose.id });
   }
   // Aligned: the brackets replace the ghost camera and its label, so only one frame shows.
   savedGhost.object.visible = !aligned;
