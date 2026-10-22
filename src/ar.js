@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { renderer, scene } from "./scene.js";
 import { modelRoot, setPreview } from "./model.js";
+import { tokenColor } from "./tokens.js";
 
 const startHandlers = [];
 const endHandlers = [];
@@ -12,7 +13,7 @@ export function onSessionEnd(fn) { endHandlers.push(fn); }
 // Flat ring with a centre dot that marks where the part will go. Drawn on top so
 // the preview part doesn't hide it.
 const reticleMaterial = new THREE.MeshBasicMaterial({
-  color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false });
+  color: tokenColor("--label-bg"), transparent: true, opacity: 0.9, depthTest: false });
 const reticle = new THREE.Mesh(
   new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2), reticleMaterial);
 reticle.add(new THREE.Mesh(
