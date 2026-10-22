@@ -1,205 +1,231 @@
 import * as THREE from "three";
 import { getLocalPose } from "./pose.js";
 import { isPlaced, isTracking } from "./ar.js";
-import { send, getRole } from "./net.js";
+import { send, getRole, getStatus } from "./net.js";
 import { modelRoot } from "./model.js";
-import { createGhost } from "./ghost.js";
+import { createSavedView } from "./ghost.js";
 import { renderer, camera } from "./scene.js";
+import { getMode } from "./expert-tools.js";
+import { layoutBottom, showPill } from "./hud.js";
+import { ARROW_ICON, CAMERA_ICON, STEP_ICON, setIconButton } from "./icons.js";
+import { validPose, viewpointAlignment } from "./spatial.js";
 
-const ARRIVE_M = 0.05;  // closer than 5 cm counts as "at the view"
-const AXIS_COS = 0.9;   // within ~25° of straight ahead or straight behind
-
-let hud = null;
-let button = null;      // expert: Save view
-let viewToggle = null;  // novice: Show / Hide view
-
-let arrow = null;       // novice guide: icon + label, top centre
-let turnIcon = null;    // arrow that rotates toward the target
-let stepIcon = null;    // double chevron: move forward / move back
-let arrowText = null;
-
-let savedGhost = null;
-let savedPose = null;
-
-const camPos = new THREE.Vector3();
-const camQuat = new THREE.Quaternion();
+const AXIS_COS = 0.9;
 const target = new THREE.Vector3();
 const offset = new THREE.Vector3();
+const projected = new THREE.Vector3();
+const rotation = new THREE.Quaternion();
+const desiredDirection = new THREE.Vector3();
+let hud;
+let saveButton;
+let viewToggle;
+let direction;
+let arrowIcon;
+let stepIcon;
+let directionText;
+let guide;
+let progress;
+let progressText;
+let sceneLabel;
+let savedGhost;
+let savedPose = null;
+let visible = false;
+let matchedId = null;
+let sequence = 0;
 
-// Flash the screen corners when the expert saves a view
+function ready() {
+  return isPlaced() && (!renderer.xr.isPresenting || isTracking())
+    && !hud.querySelector(".start-screen");
+}
+
 function flash() {
-  const f = document.createElement("div");
-  f.className = "view-flash";
-  f.setAttribute("aria-hidden", "true");
-  hud.appendChild(f);
-  requestAnimationFrame(() => { f.style.opacity = "0"; });
-  setTimeout(() => f.remove(), 350);
+  const corners = document.createElement("div");
+  corners.className = "view-flash";
+  corners.setAttribute("aria-hidden", "true");
+  corners.innerHTML = "<span></span><span></span><span></span><span></span>";
+  hud.appendChild(corners);
+  corners.addEventListener("animationend", () => corners.remove(), { once: true });
+  setTimeout(() => corners.remove(), 500);
 }
 
-// Show a toast notification for a few seconds
-function notification(text) {
-  const t = document.createElement("div");
-  t.className = "toast view-toast";
-  t.textContent = text;
-  t.setAttribute("role", "status");
-  hud.appendChild(t);
-  setTimeout(() => t.remove(), 2000);
-}
-
-// Expert: send the current pose to the novice, and show a flash and toast
 function saveViewpoint() {
   const pose = getLocalPose();
-  if (!pose) {
-    notification("Unable to save viewpoint: pose not available");
+  if (!ready() || !pose) {
+    showPill("Place the part and wait for tracking");
     return;
   }
-  window.savedViewpoint = pose;
-  savedPose = pose;
-  send({ t: "viewpoint", p: pose.p, q: pose.q });
+  savedPose = { id: `${Date.now().toString(36)}-${++sequence}`, ...pose };
+  resendViewpoint();
   flash();
-  notification("View sent to Novice");
+  showPill(getStatus() === "connected" ? "View sent to novice" : "View saved for when novice connects");
 }
 
-// Novice: show/hide the saved ghost
+function updateToggle() {
+  setIconButton(viewToggle, CAMERA_ICON, visible ? "Hide saved view" : "Show saved view");
+  viewToggle.setAttribute("aria-pressed", String(visible));
+  viewToggle.classList.toggle("is-active", visible);
+}
+
 export function toggleViewpoint() {
-  if (!savedGhost) return;
-  savedGhost.object.visible = !savedGhost.object.visible;
-  viewToggle.textContent = savedGhost.object.visible ? "Hide view" : "Show view";
+  visible = !visible;
+  updateToggle();
 }
 
-// Called once at startup to create the buttons and the guide and add them to the HUD
-export function initViewpoint() {
-  hud = document.getElementById("hud");
-
-  button = document.createElement("button");
-  button.id = "ViewButton";
-  button.className = "btn view-button";
-  button.innerHTML =
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-     <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-     <circle cx="12" cy="13" r="3"/>
-   </svg>`;
-button.setAttribute("aria-label", "Save view");
-button.title = "Save view";
-button.classList.add("view-icon");
+function action(className, icon, label, handler) {
+  const button = document.createElement("button");
+  button.className = `btn ${className}`;
+  setIconButton(button, icon, label);
   button.hidden = true;
   button.addEventListener("beforexrselect", (e) => e.preventDefault());
-  button.addEventListener("click", saveViewpoint);
+  button.addEventListener("keydown", (e) => e.stopPropagation());
+  button.addEventListener("click", handler);
   hud.appendChild(button);
-
-  viewToggle = document.createElement("button");
-  viewToggle.className = "btn view-button";
-  viewToggle.innerHTML =
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-     <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-     <circle cx="12" cy="13" r="3"/>
-   </svg>`;
-  viewToggle.setAttribute("aria-label", "Toggle view");
-  viewToggle.title = "Toggle view";
-  viewToggle.hidden = true;
-  viewToggle.addEventListener("beforexrselect", (e) => e.preventDefault());
-  viewToggle.addEventListener("click", toggleViewpoint);
-  hud.appendChild(viewToggle);
-
-  // Compact guide, top centre under the status chips, so the part stays visible.
-  // Styled inline: it doesn't depend on any rule in style.css.
-  arrow = document.createElement("div");
-  arrow.hidden = true;
-  arrow.style.cssText =
-    "position:absolute;left:50%;transform:translateX(-50%);" +
-    "top:var(--below-chips, 72px);" +
-    "display:flex;flex-direction:column;align-items:center;gap:6px;" +
-    "width:max-content;pointer-events:none";
-
-  const ICON = "display:block;width:44px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))";
-  const CHEVRONS = "M10 22 L24 8 L38 22 M10 38 L24 24 L38 38";
-  arrow.innerHTML =
-    `<svg data-part="turn" viewBox="0 0 48 48" style="${ICON}">
-       <path d="M24 4 L40 40 L24 32 L8 40 Z" fill="#fff" stroke="#16191D"
-             stroke-width="2" stroke-linejoin="round"/>
-     </svg>
-     <svg data-part="step" viewBox="0 0 48 48" style="${ICON};display:none">
-       <path d="${CHEVRONS}" fill="none" stroke="#16191D" stroke-width="8"
-             stroke-linecap="round" stroke-linejoin="round"/>
-       <path d="${CHEVRONS}" fill="none" stroke="#fff" stroke-width="4.5"
-             stroke-linecap="round" stroke-linejoin="round"/>
-     </svg>
-     <div data-part="label" style="padding:6px 12px;border-radius:999px;
-          background:var(--hud);color:var(--hud-text);white-space:nowrap;
-          font:500 12px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase"></div>`;
-  hud.appendChild(arrow);
-  turnIcon = arrow.querySelector('[data-part="turn"]');
-  stepIcon = arrow.querySelector('[data-part="step"]');
-  arrowText = arrow.querySelector('[data-part="label"]');
+  return button;
 }
 
-// Novice: a frozen ghost. update() is never called on it, so it doesn't time out.
-export function receiveViewpoint({ p, q }) {
-  savedPose = { p, q };
-  if (!savedGhost) {
-    savedGhost = createGhost("expert");
-    savedGhost.object.traverse((o) => o.material?.color.set(0xffffff)); // white = saved view
-    modelRoot.add(savedGhost.object);
-  }
-  savedGhost.object.position.fromArray(p);
-  savedGhost.object.quaternion.fromArray(q);
-  savedGhost.object.visible = true;
-  if (viewToggle) viewToggle.textContent = "Hide view";
-  notification("Expert saved a new view");
+export function initViewpoint() {
+  hud = document.getElementById("hud");
+  saveButton = action("tool-side-action view-save", CAMERA_ICON, "Save view", saveViewpoint);
+  viewToggle = action("tool-side-action view-toggle", CAMERA_ICON, "Show saved view", toggleViewpoint);
+  updateToggle();
+  direction = document.createElement("div");
+  direction.className = "view-direction";
+  direction.hidden = true;
+  direction.innerHTML = `<span class="view-direction-icon" aria-hidden="true">${ARROW_ICON}</span>
+    <span class="view-step-icon" aria-hidden="true">${STEP_ICON}</span>
+    <span class="chip view-direction-text"></span>`;
+  arrowIcon = direction.querySelector(".view-direction-icon");
+  stepIcon = direction.querySelector(".view-step-icon");
+  directionText = direction.querySelector(".view-direction-text");
+
+  guide = document.createElement("div");
+  guide.className = "toast view-guidance";
+  guide.hidden = true;
+  guide.innerHTML = `<div class="view-progress">
+      <div class="progress-label"></div>
+      <div class="progress-track" role="progressbar" aria-label="View alignment"
+        aria-valuemin="0" aria-valuemax="100"><div class="progress-fill"></div></div>
+    </div>`;
+  progress = guide.querySelector(".progress-track");
+  progressText = guide.querySelector(".progress-label");
+
+  sceneLabel = document.createElement("div");
+  sceneLabel.className = "pin-label view-scene-label";
+  sceneLabel.innerHTML = `${CAMERA_ICON}<span>Expert's view · step here</span>`;
+  sceneLabel.hidden = true;
+  hud.append(direction, guide, sceneLabel);
+  new ResizeObserver(layoutBottom).observe(guide);
 }
 
-// Call every frame: the expert sees Save view once the part is placed; the novice
-// gets the toggle and the guide once a view has arrived
-export function updateViewpoint() {
-  const role = getRole();
-  button.hidden = !(role === "expert" && isPlaced());
-  viewToggle.hidden = !(role === "novice" && savedGhost);
-  updateGuide();
-}
-
-function updateGuide() {
-  const show = getRole() === "novice" && savedPose && savedGhost?.object.visible
-    && (!renderer.xr.isPresenting || isTracking());
-  arrow.hidden = !show;
-  if (!show) return;
-
-  // Saved position in world space, then relative to the novice's camera
-  const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
-  cam.getWorldPosition(camPos);
-  cam.getWorldQuaternion(camQuat);
-  target.fromArray(savedPose.p);
-  modelRoot.localToWorld(target);
-  offset.copy(target).sub(camPos);
-  const dist = offset.length();
-  offset.applyQuaternion(camQuat.invert()); // x right, y up, -z forward
-
-  // Arrived: hide the ghost and the guide, and say so
-  if (dist < ARRIVE_M) {
-    savedGhost.object.visible = false;
-    viewToggle.textContent = "Show view";
-    arrow.hidden = true;
-    notification("Reached Experts Saved View");
+export function receiveViewpoint(msg) {
+  if (!validPose(msg) || typeof msg.id !== "string" || !msg.id) {
+    console.warn("Ignoring invalid saved view", msg);
     return;
   }
+  if (savedPose?.id === msg.id) return;
+  savedPose = { id: msg.id, p: [...msg.p], q: [...msg.q] };
+  matchedId = null;
+  visible = true;
+  if (!savedGhost) {
+    savedGhost = createSavedView();
+    modelRoot.add(savedGhost.object);
+  }
+  savedGhost.object.position.fromArray(msg.p);
+  savedGhost.object.quaternion.fromArray(msg.q).normalize();
+  updateToggle();
+  showPill("Expert saved a new view");
+}
 
-  const cm = Math.round(dist * 100);
-  const along = -offset.z / dist;               // 1 = dead ahead, -1 = dead behind
+function setGuideVisible(show) {
+  if (guide.hidden !== !show) {
+    guide.hidden = !show;
+    layoutBottom();
+  }
+  direction.hidden = !show;
+  sceneLabel.hidden = !show;
+}
+
+export function updateViewpoint(time) {
+  const novice = getRole() === "novice";
+  const available = ready();
+  saveButton.hidden = !(getRole() === "expert" && available && getMode() === "view"
+    && !hud.querySelector(".expert-toolbar")?.hidden);
+  viewToggle.hidden = !(novice && available && savedPose);
+  viewToggle.classList.toggle("beside-drawer", hud.classList.contains("has-pin-drawer"));
+  const show = !!(novice && available && savedPose && visible);
+  if (savedGhost) {
+    savedGhost.object.visible = show;
+    savedGhost.update(time);
+  }
+  setGuideVisible(show);
+  if (!show || document.hidden) return;
+
+  const pose = getLocalPose();
+  const alignment = viewpointAlignment(pose, savedPose);
+  progressText.textContent = alignment.aligned ? "View matched · 100%" : `Getting closer · ${alignment.score}%`;
+  progress.setAttribute("aria-valuenow", String(alignment.score));
+  progress.querySelector(".progress-fill").style.width = `${alignment.score}%`;
+  if (alignment.aligned && matchedId !== savedPose.id) {
+    matchedId = savedPose.id;
+    navigator.vibrate?.(80);
+    send({ t: "aligned", id: savedPose.id });
+    showPill("View matched");
+  }
+  updateDirection(pose, alignment);
+  updateLabel();
+}
+
+function updateDirection(pose, { distance, aligned }) {
+  offset.fromArray(savedPose.p).sub(target.fromArray(pose.p));
+  rotation.fromArray(pose.q).invert();
+  offset.applyQuaternion(rotation);
+  const along = distance > 0 ? -offset.z / distance : 0;
+  const near = distance <= 0.05;
   const onAxis = Math.abs(along) > AXIS_COS;
-
-  turnIcon.style.display = onAxis ? "none" : "block";
-  stepIcon.style.display = onAxis ? "block" : "none";
-  if (onAxis) {
-    // Double chevron: up = move forward, flipped = move back
-    stepIcon.style.transform = along > 0 ? "" : "rotate(180deg)";
-    arrowText.textContent = `${along > 0 ? "Move forward" : "Move back"} · ${cm} cm`;
+  arrowIcon.hidden = near || onAxis;
+  stepIcon.hidden = near || !onAxis;
+  if (near) {
+    directionText.textContent = "View matched";
+    if (!aligned) {
+      desiredDirection.set(0, 0, -1)
+        .applyQuaternion(new THREE.Quaternion().fromArray(savedPose.q))
+        .applyQuaternion(rotation);
+      const yaw = Math.atan2(desiredDirection.x, -desiredDirection.z);
+      const pitch = Math.atan2(desiredDirection.y, Math.hypot(desiredDirection.x, desiredDirection.z));
+      const horizontal = Math.abs(yaw) >= Math.abs(pitch);
+      const turn = horizontal ? (yaw > 0 ? 90 : -90) : (pitch > 0 ? 0 : 180);
+      stepIcon.hidden = false;
+      stepIcon.style.transform = `rotate(${turn}deg)`;
+      directionText.textContent = horizontal
+        ? `Turn ${yaw > 0 ? "right" : "left"} to match`
+        : `Tilt ${pitch > 0 ? "up" : "down"} to match`;
+    }
   } else {
-    turnIcon.style.transform = `rotate(${Math.atan2(offset.x, offset.y)}rad)`;
-    turnIcon.style.opacity = along < 0 ? "0.6" : "1"; // dimmer when it's behind you
-    arrowText.textContent = along < 0 ? `Behind you · ${cm} cm` : `${cm} cm`;
+    const cm = Math.round(distance * 100);
+    arrowIcon.style.transform = `rotate(${Math.atan2(offset.x, offset.y)}rad)`;
+    stepIcon.style.transform = along > 0 ? "" : "rotate(180deg)";
+    directionText.textContent = onAxis
+      ? `${along > 0 ? "Move forward" : "Move back"} · ${cm} cm`
+      : `${along < 0 ? "Behind you" : "Move toward camera"} · ${cm} cm`;
   }
 }
 
-// Expert: the latest pose, so it can be resent when the novice (re)connects
-export function getSavedPose() { return savedPose; }
+function updateLabel() {
+  const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  savedGhost.object.getWorldPosition(projected);
+  projected.project(cam);
+  sceneLabel.hidden = projected.z < -1 || projected.z > 1
+    || ![projected.x, projected.y, projected.z].every(Number.isFinite)
+    || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
+  if (sceneLabel.hidden) return;
+  sceneLabel.style.left = `${(projected.x + 1) * window.innerWidth / 2}px`;
+  sceneLabel.style.top = `${(1 - projected.y) * window.innerHeight / 2}px`;
+}
+
+export function resendViewpoint() {
+  if (getRole() === "expert" && savedPose) send({ t: "viewpoint", ...savedPose });
+}
+
+export function receiveAlignment({ id }) {
+  if (savedPose?.id === id) showPill("Novice matched your view");
+}

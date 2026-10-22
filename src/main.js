@@ -10,7 +10,7 @@ import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
-import { initViewpoint, updateViewpoint, receiveViewpoint, getSavedPose } from "./viewpoint.js";
+import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint } from "./viewpoint.js";
 import { initPins } from "./pins.js";
 import { initGrab } from "./grab.js";
 import { createSketch, initSketchInput } from "./sketch.js";
@@ -42,9 +42,14 @@ initAR();
 initDebug();
 initViewpoint();
 
-on("viewpoint", receiveViewpoint);
+on("viewpoint", (msg) => {
+  if (getRole() === "novice" && getRemoteRole() === "expert") receiveViewpoint(msg);
+});
 on("grab", (msg) => {
   if (getRole() === "novice" && getRemoteRole() === "expert") grab.receive(msg);
+});
+on("aligned", (msg) => {
+  if (getRole() === "expert" && getRemoteRole() === "novice") receiveAlignment(msg);
 });
 
 
@@ -58,6 +63,7 @@ on("hello", (msg) => {
   if (getRole() === "expert" && msg.role === "novice") {
     pins.resend();
     grab.resend();
+    resendViewpoint();
   }
   else if (msg.role === "expert") pins.clearRemote();
 });
@@ -113,5 +119,5 @@ startLoop((time, frame) => {
   grab.update(activeCamera, ready);
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
-  updateViewpoint();
+  updateViewpoint(time);
 });

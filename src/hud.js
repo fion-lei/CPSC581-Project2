@@ -134,8 +134,10 @@ export function layoutBottom() {
   if (!toolbar || !toast) return;
   const toolbarSpace = slotSpace(".bottom-bar");
   const toastSpace = slotSpace(".toast-area");
+  const guidanceSpace = slotSpace(".view-guidance");
   hudRoot.style.setProperty("--toast-offset", `${toolbarSpace}px`);
-  hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace}px`);
+  hudRoot.style.setProperty("--guidance-offset", `${toolbarSpace + toastSpace}px`);
+  hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace + guidanceSpace}px`);
 }
 
 function makeToast(hud) {
