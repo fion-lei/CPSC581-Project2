@@ -127,7 +127,6 @@ export function createPinDrawer(hud, { isNovice, onSelect, onRemove, onRemoveAll
       status.setAttribute("aria-label", pin.acked ? "Confirmed by the novice" : "Waiting for the novice");
       status.innerHTML = pin.acked ? CHECK_BADGE : WAIT_ICON;
       row.appendChild(status);
-      if (novice) return row;
       const remove = button("pin-row-remove");
       setIconButton(remove, TRASH_ICON, `Remove pin ${pin.no}`);
       remove.addEventListener("click", () => onRemove(pin.id));

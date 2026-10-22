@@ -22,6 +22,10 @@ const CONE_HALF_W = CONE_HALF_H * (PHONE_W / PHONE_H);
 const SMOOTHING = 0.25;  // lerp / slerp factor per frame
 const SNAP_DISTANCE = 1; // m; bigger jumps teleport
 const TIMEOUT_MS = 2000;
+// Standing inside a ghost's cone tints and frames the whole screen, so the ghost
+// fades out as this phone nears it: gone within HIDE_NEAR, full past FADE_FAR.
+const HIDE_NEAR = 0.12;  // m
+const FADE_FAR = 0.3;    // m
 
 const fillMaterial = (color, opacity, side) => new THREE.MeshBasicMaterial({
   color, transparent: true, opacity, depthWrite: false, side });
@@ -102,20 +106,33 @@ export function createGhost(role) {
   const color = COLORS[role];
   const object = new THREE.Group();
   object.visible = false;
+  // Holds the looks, so fading never touches object.visible (that tracks timeouts)
+  const look = new THREE.Group();
+  object.add(look);
 
   // FrontSide only, so a closed body doesn't stack two layers of opacity
-  object.add(new THREE.Mesh(body, fillMaterial(color, 0.22, THREE.FrontSide)));
-  object.add(new LineSegments2(loopLine, lineMaterial(color)));
+  look.add(new THREE.Mesh(body, fillMaterial(color, 0.22, THREE.FrontSide)));
+  look.add(new LineSegments2(loopLine, lineMaterial(color, { transparent: true })));
 
   if (role === "novice") {
     object.scale.setScalar(NOVICE_SCALE);
   } else {
     // DoubleSide: the cone is open, so its far faces are seen from inside
-    object.add(new THREE.Mesh(coneFill, fillMaterial(color, 0.14, THREE.DoubleSide)));
-    const edges = new LineSegments2(coneEdges,
-      lineMaterial(color, { dashed: true, dashSize: 0.01, gapSize: 0.006 }));
+    look.add(new THREE.Mesh(coneFill, fillMaterial(color, 0.14, THREE.DoubleSide)));
+    const edges = new LineSegments2(coneEdges, lineMaterial(color,
+      { dashed: true, dashSize: 0.01, gapSize: 0.006, transparent: true }));
     edges.computeLineDistances();
-    object.add(edges);
+    look.add(edges);
+  }
+  const fades = look.children.map(({ material }) => ({ material, opacity: material.opacity }));
+
+  // How close this phone is decides how much of the ghost shows.
+  function fadeNear(localPosition) {
+    const t = localPosition
+      ? THREE.MathUtils.smoothstep(object.position.distanceTo(localPosition), HIDE_NEAR, FADE_FAR)
+      : 1;
+    look.visible = t > 0;
+    fades.forEach(({ material, opacity }) => { material.opacity = opacity * t; });
   }
 
   const targetPos = new THREE.Vector3();
@@ -129,8 +146,9 @@ export function createGhost(role) {
     lastPoseAt = performance.now();
   }
 
-  // Once per frame: ease toward the latest pose; hide when poses stop arriving
-  function update() {
+  // Once per frame: ease toward the latest pose; hide when poses stop arriving.
+  // localPosition is this phone in modelRoot space (or null), for fadeNear.
+  function update(localPosition) {
     if (performance.now() - lastPoseAt > TIMEOUT_MS) {
       object.visible = false;
       return;
@@ -140,10 +158,11 @@ export function createGhost(role) {
       object.position.copy(targetPos);
       object.quaternion.copy(targetQuat);
       object.visible = true;
-      return;
+    } else {
+      object.position.lerp(targetPos, SMOOTHING);
+      object.quaternion.slerp(targetQuat, SMOOTHING);
     }
-    object.position.lerp(targetPos, SMOOTHING);
-    object.quaternion.slerp(targetQuat, SMOOTHING);
+    fadeNear(localPosition);
   }
 
   return { object, setPose, update };
