@@ -10,7 +10,9 @@ import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
+import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint } from "./viewpoint.js";
 import { initPins } from "./pins.js";
+import { initGrab } from "./grab.js";
 import { createSketch, initSketchInput } from "./sketch.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
@@ -34,9 +36,22 @@ controls.enableDamping = true;
 controls.update();
 
 const pins = initPins({ expertGhost: ghosts.expert.object, send, getRole });
+const grab = initGrab({ send, controls });
 
 initAR();
 initDebug();
+initViewpoint();
+
+on("viewpoint", (msg) => {
+  if (getRole() === "novice" && getRemoteRole() === "expert") receiveViewpoint(msg);
+});
+on("grab", (msg) => {
+  if (getRole() === "novice" && getRemoteRole() === "expert") grab.receive(msg);
+});
+on("aligned", (msg) => {
+  if (getRole() === "expert" && getRemoteRole() === "novice") receiveAlignment(msg);
+});
+
 
 onStatus(setStatus);
 on("hello", (msg) => {
@@ -45,7 +60,11 @@ on("hello", (msg) => {
   if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
   // comes first on the same ordered channel, so the novice clears, then refills.
-  if (getRole() === "expert") pins.resend();
+  if (getRole() === "expert" && msg.role === "novice") {
+    pins.resend();
+    grab.resend();
+    resendViewpoint();
+  }
   else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
@@ -97,6 +116,8 @@ startLoop((time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
+  grab.update(activeCamera, ready);
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
+  updateViewpoint(time);
 });

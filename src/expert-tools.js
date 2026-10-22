@@ -26,11 +26,24 @@ export const { getMode, setMode, onModeChange } = createModeStore();
 
 // Intersect actual part meshes only: edge lines, ghosts and later annotations
 // must not light up the crosshair. Returned points are in WORLD coordinates.
-export function createCentreAim(modelRoot, modelPivot) {
+export function createPartRaycast(modelRoot, modelPivot) {
   const raycaster = new THREE.Raycaster();
+  // The CAD meshes are direct children. Pins and their catch meshes are not.
+  const meshes = modelPivot.children.filter((object) => object.isMesh);
+  return {
+    raycaster,
+    intersect() {
+      if (!modelRoot.visible || !modelPivot.visible) return null;
+      modelRoot.updateWorldMatrix(true, true);
+      return raycaster.intersectObjects(meshes, false)[0] ?? null;
+    },
+  };
+}
+
+export function createCentreAim(modelRoot, modelPivot) {
+  const { raycaster, intersect } = createPartRaycast(modelRoot, modelPivot);
   const origin = new THREE.Vector3();
   const direction = new THREE.Vector3();
-  const meshes = [];
   let hit = null;
 
   return {
@@ -45,11 +58,7 @@ export function createCentreAim(modelRoot, modelPivot) {
       raycaster.set(origin, direction);
       raycaster.near = camera.near;
       raycaster.far = camera.far;
-      meshes.length = 0;
-      modelPivot.traverseVisible((object) => {
-        if (object.isMesh) meshes.push(object);
-      });
-      hit = raycaster.intersectObjects(meshes, false)[0] ?? null;
+      hit = intersect();
       return hit;
     },
   };

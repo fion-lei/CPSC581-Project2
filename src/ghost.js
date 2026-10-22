@@ -76,6 +76,25 @@ coneFill.setAttribute("position", new THREE.Float32BufferAttribute(
 const coneEdges = new LineSegmentsGeometry().setPositions(
   corners.flatMap((c, i) => [...apex, ...c, ...c, ...corners[(i + 1) % 4]]));
 
+export function createSavedView() {
+  const object = new THREE.Group();
+  const material = lineMaterial(COLORS.expert,
+    { dashed: true, dashSize: 0.01, gapSize: 0.006, transparent: true });
+  for (const geometry of [loopLine, coneEdges]) {
+    const edges = new LineSegments2(geometry, material);
+    edges.computeLineDistances();
+    object.add(edges);
+  }
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  object.visible = false;
+  return {
+    object,
+    update(time) {
+      material.opacity = reducedMotion.matches ? 1 : 0.775 + Math.sin(time / 600) * 0.225;
+    },
+  };
+}
+
 // The other person's phone, posed in modelRoot local space. Looks down its local -z
 // like a camera. role picks the look: expert = orange with a view cone, novice =
 // smaller blue phone without one.
