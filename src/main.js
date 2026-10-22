@@ -55,7 +55,6 @@ on("aligned", (msg) => {
 
 onStatus(setStatus);
 on("hello", (msg) => {
-  console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
   if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
