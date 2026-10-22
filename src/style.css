@@ -45,6 +45,7 @@
   --space-4: 16px;
   --radius-panel: 14px;
   --outline-width: 2px;
+  --bracket-width: 4px;
   --progress-track: #3A4251;
   --progress-fill: #60A5FA;
   --hud-max-width: 440px;
@@ -326,6 +327,28 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .view-progress { flex: 1; min-width: 0; }
 .view-guidance .progress-label { white-space: nowrap; }
+/* Aligned: title + vibrate icon on top, the full bar, then a caption below it */
+.view-aligned-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.view-aligned-head .toast-title { flex: 1; min-width: 0; }
+.view-aligned-head .icon { flex: none; width: var(--icon-size); height: var(--icon-size); color: var(--novice-soft); }
+.view-aligned-caption { margin-top: var(--space-2); color: var(--hud-muted); font: 500 14px/1.2 var(--font-ui); }
+.view-guidance.is-aligned .progress-label,
+.view-guidance:not(.is-aligned) .view-aligned-head,
+.view-guidance:not(.is-aligned) .view-aligned-caption { display: none; }
+/* Aligned brackets: frame the view between the chips and the guidance panel */
+.view-aligned {
+  position: absolute; pointer-events: none;
+  top: var(--below-chips); left: var(--edge-left); right: var(--edge-right);
+  bottom: calc(var(--edge-bottom) + var(--bottom-clearance, 0px) + var(--space-4));
+}
+.view-aligned span {
+  position: absolute; width: var(--icon-target); height: var(--icon-target);
+  border: 0 solid var(--novice);
+}
+.view-aligned span:nth-child(1) { top: 0; left: 0; border-top-width: var(--bracket-width); border-left-width: var(--bracket-width); }
+.view-aligned span:nth-child(2) { top: 0; right: 0; border-top-width: var(--bracket-width); border-right-width: var(--bracket-width); }
+.view-aligned span:nth-child(3) { bottom: 0; left: 0; border-bottom-width: var(--bracket-width); border-left-width: var(--bracket-width); }
+.view-aligned span:nth-child(4) { bottom: 0; right: 0; border-bottom-width: var(--bracket-width); border-right-width: var(--bracket-width); }
 .pin-label.view-scene-label {
   display: flex; align-items: center; gap: var(--space-2);
   transform: translate(-50%, calc(-100% - var(--space-2)));

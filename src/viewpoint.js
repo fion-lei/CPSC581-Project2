@@ -7,10 +7,13 @@ import { createSavedView } from "./ghost.js";
 import { renderer, camera } from "./scene.js";
 import { getMode } from "./expert-tools.js";
 import { layoutBottom, showPill } from "./hud.js";
-import { ARROW_ICON, CAMERA_ICON, STEP_ICON, setIconButton } from "./icons.js";
-import { validPose, viewpointAlignment } from "./spatial.js";
+import { ARROW_ICON, CAMERA_ICON, STEP_ICON, VIBRATE_ICON, setIconButton } from "./icons.js";
+import { alignmentState, validPose, viewpointAlignment } from "./spatial.js";
 
 const AXIS_COS = 0.9;
+const NEAR = 0.05;
+const FAR = 0.5; // past this, the arrow shows even with the view on screen
+const BUZZ = [60, 40, 60];
 const target = new THREE.Vector3();
 const offset = new THREE.Vector3();
 const projected = new THREE.Vector3();
@@ -27,10 +30,13 @@ let guide;
 let progress;
 let progressText;
 let sceneLabel;
+let brackets;
 let savedGhost;
 let savedPose = null;
 let visible = false;
-let matchedId = null;
+let aligned = false;
+let reportedId = null; // the expert hears about each saved view once
+let onScreen = false;
 let sequence = 0;
 
 function ready() {
@@ -102,9 +108,13 @@ export function initViewpoint() {
   guide.className = "toast view-guidance";
   guide.hidden = true;
   guide.innerHTML = `<div class="view-progress">
+      <div class="view-aligned-head">
+        <div class="toast-title">You're seeing the expert's view</div>${VIBRATE_ICON}
+      </div>
       <div class="progress-label"></div>
       <div class="progress-track" role="progressbar" aria-label="View alignment"
         aria-valuemin="0" aria-valuemax="100"><div class="progress-fill"></div></div>
+      <div class="view-aligned-caption">Aligned · 100%</div>
     </div>`;
   progress = guide.querySelector(".progress-track");
   progressText = guide.querySelector(".progress-label");
@@ -113,7 +123,12 @@ export function initViewpoint() {
   sceneLabel.className = "pin-label view-scene-label";
   sceneLabel.innerHTML = `${CAMERA_ICON}<span>Expert's view · step here</span>`;
   sceneLabel.hidden = true;
-  hud.append(direction, guide, sceneLabel);
+  brackets = document.createElement("div");
+  brackets.className = "view-aligned";
+  brackets.setAttribute("aria-hidden", "true");
+  brackets.innerHTML = "<span></span><span></span><span></span><span></span>";
+  brackets.hidden = true;
+  hud.append(brackets, direction, guide, sceneLabel);
   new ResizeObserver(layoutBottom).observe(guide);
 }
 
@@ -124,7 +139,7 @@ export function receiveViewpoint(msg) {
   }
   if (savedPose?.id === msg.id) return;
   savedPose = { id: msg.id, p: [...msg.p], q: [...msg.q] };
-  matchedId = null;
+  setAligned(false);
   visible = true;
   if (!savedGhost) {
     savedGhost = createSavedView();
@@ -136,7 +151,24 @@ export function receiveViewpoint(msg) {
   showPill("Expert saved a new view");
 }
 
+function buzz() {
+  try {
+    navigator.vibrate?.(BUZZ);
+  } catch {
+    // No vibration here (iPhone, desktop): skip silently.
+  }
+}
+
+function setAligned(on) {
+  aligned = on;
+  guide.classList.toggle("is-aligned", on);
+  brackets.hidden = !on;
+}
+
 function setGuideVisible(show) {
+  // Keep `aligned` while hidden (e.g. a tracking blip): on return the hysteresis
+  // decides, so a brief loss doesn't re-buzz.
+  brackets.hidden = !(show && aligned);
   if (guide.hidden !== !show) {
     guide.hidden = !show;
     layoutBottom();
@@ -162,44 +194,56 @@ export function updateViewpoint(time) {
 
   const pose = getLocalPose();
   const alignment = viewpointAlignment(pose, savedPose);
-  progressText.textContent = alignment.aligned ? "View matched · 100%" : `Getting closer · ${alignment.score}%`;
-  progress.setAttribute("aria-valuenow", String(alignment.score));
-  progress.querySelector(".progress-fill").style.width = `${alignment.score}%`;
-  if (alignment.aligned && matchedId !== savedPose.id) {
-    matchedId = savedPose.id;
-    navigator.vibrate?.(80);
-    send({ t: "aligned", id: savedPose.id });
-    showPill("View matched");
+  const nowAligned = alignmentState(aligned, alignment);
+  if (nowAligned !== aligned) {
+    setAligned(nowAligned);
+    if (nowAligned) {
+      buzz();
+      if (reportedId !== savedPose.id) {
+        reportedId = savedPose.id;
+        send({ t: "aligned", id: savedPose.id });
+      }
+    }
   }
-  updateDirection(pose, alignment);
+  // Aligned: the brackets replace the ghost camera and its label, so only one frame shows.
+  savedGhost.object.visible = !aligned;
+  const score = aligned ? 100 : alignment.score;
+  progressText.textContent = `Getting closer · ${score}%`;
+  progress.setAttribute("aria-valuenow", String(score));
+  progress.querySelector(".progress-fill").style.width = `${score}%`;
+  direction.hidden = aligned;
+  if (aligned) {
+    sceneLabel.hidden = true;
+    return;
+  }
   updateLabel();
+  updateDirection(pose, alignment);
 }
 
-function updateDirection(pose, { distance, aligned }) {
+// Only runs while not aligned; the brackets and panel take over once aligned.
+function updateDirection(pose, { distance }) {
   offset.fromArray(savedPose.p).sub(target.fromArray(pose.p));
   rotation.fromArray(pose.q).invert();
   offset.applyQuaternion(rotation);
   const along = distance > 0 ? -offset.z / distance : 0;
-  const near = distance <= 0.05;
+  const near = distance <= NEAR;
   const onAxis = Math.abs(along) > AXIS_COS;
-  arrowIcon.hidden = near || onAxis;
+  // The ghost camera itself shows the way when it's on screen and close.
+  arrowIcon.hidden = near || onAxis || (onScreen && distance <= FAR);
   stepIcon.hidden = near || !onAxis;
   if (near) {
-    directionText.textContent = "View matched";
-    if (!aligned) {
-      desiredDirection.set(0, 0, -1)
-        .applyQuaternion(new THREE.Quaternion().fromArray(savedPose.q))
-        .applyQuaternion(rotation);
-      const yaw = Math.atan2(desiredDirection.x, -desiredDirection.z);
-      const pitch = Math.atan2(desiredDirection.y, Math.hypot(desiredDirection.x, desiredDirection.z));
-      const horizontal = Math.abs(yaw) >= Math.abs(pitch);
-      const turn = horizontal ? (yaw > 0 ? 90 : -90) : (pitch > 0 ? 0 : 180);
-      stepIcon.hidden = false;
-      stepIcon.style.transform = `rotate(${turn}deg)`;
-      directionText.textContent = horizontal
-        ? `Turn ${yaw > 0 ? "right" : "left"} to match`
-        : `Tilt ${pitch > 0 ? "up" : "down"} to match`;
-    }
+    desiredDirection.set(0, 0, -1)
+      .applyQuaternion(new THREE.Quaternion().fromArray(savedPose.q))
+      .applyQuaternion(rotation);
+    const yaw = Math.atan2(desiredDirection.x, -desiredDirection.z);
+    const pitch = Math.atan2(desiredDirection.y, Math.hypot(desiredDirection.x, desiredDirection.z));
+    const horizontal = Math.abs(yaw) >= Math.abs(pitch);
+    const turn = horizontal ? (yaw > 0 ? 90 : -90) : (pitch > 0 ? 0 : 180);
+    stepIcon.hidden = false;
+    stepIcon.style.transform = `rotate(${turn}deg)`;
+    directionText.textContent = horizontal
+      ? `Turn ${yaw > 0 ? "right" : "left"} to match`
+      : `Tilt ${pitch > 0 ? "up" : "down"} to match`;
   } else {
     const cm = Math.round(distance * 100);
     arrowIcon.style.transform = `rotate(${Math.atan2(offset.x, offset.y)}rad)`;
@@ -214,10 +258,11 @@ function updateLabel() {
   const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   savedGhost.object.getWorldPosition(projected);
   projected.project(cam);
-  sceneLabel.hidden = projected.z < -1 || projected.z > 1
-    || ![projected.x, projected.y, projected.z].every(Number.isFinite)
-    || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
-  if (sceneLabel.hidden) return;
+  onScreen = projected.z >= -1 && projected.z <= 1
+    && [projected.x, projected.y, projected.z].every(Number.isFinite)
+    && Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1;
+  sceneLabel.hidden = !onScreen;
+  if (!onScreen) return;
   sceneLabel.style.left = `${(projected.x + 1) * window.innerWidth / 2}px`;
   sceneLabel.style.top = `${(1 - projected.y) * window.innerHeight / 2}px`;
 }
@@ -227,5 +272,5 @@ export function resendViewpoint() {
 }
 
 export function receiveAlignment({ id }) {
-  if (savedPose?.id === id) showPill("Novice matched your view");
+  if (savedPose?.id === id) showPill("Novice reached your view", null, 2000, "novice");
 }
