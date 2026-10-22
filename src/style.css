@@ -38,6 +38,8 @@
   --dim: 0.4;
   --pin-label-max: 200px;
   --pin-drawer-width: min(220px, 60vw);
+  --icon-size: 20px;
+  --icon-target: 48px;
 }
 
 html, body {
@@ -125,10 +127,10 @@ button.chip { cursor: pointer; pointer-events: auto; }
    Markup: <div class="crosshair"></div>; add .is-hit when it hits the part. */
 .crosshair {
   position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
-  transform: translate(-50%, -50%); color: #fff;
-  transition: color 150ms var(--ease-out);
+  transform: translate(-50%, -50%); color: var(--hud-text); opacity: var(--dim);
+  transition: opacity 150ms var(--ease-out);
 }
-.crosshair.is-hit { color: var(--expert); }
+.crosshair.is-hit { opacity: 1; }
 .crosshair::before {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: 21.5px; height: 21.5px; transform: translate(-50%, -50%);
@@ -153,7 +155,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
   padding: 0 24px !important; border: none !important; border-radius: 14px !important;
   background: var(--hud) !important; color: var(--hud-text) !important; opacity: 1 !important;
   font: 500 15px/48px var(--font-ui) !important; text-align: center !important;
-  text-decoration: none; pointer-events: auto;
+  text-decoration: none; white-space: nowrap; pointer-events: auto;
 }
 .ar-button:focus-visible { outline: 2px solid var(--hud-text) !important; outline-offset: 2px; }
 
@@ -293,6 +295,15 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
+
+/* Draw-mode actions use the same right-edge, vertically centred placement as the pin tab. */
+.sketch-actions {
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 2;
+}
+.sketch-action { min-width: 48px; min-height: 48px; padding: 0; }
+.sketch-actions .sketch-action svg { width: 20px; height: 20px; }
+.sketch-action:disabled { opacity: var(--dim); }
 
 /* Toast slot: bottom for the novice, just above the mode bar for the expert.
    hud.js sets --toast-offset and --bottom-clearance to stack the controls. */
@@ -461,6 +472,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .pin-drawer-head { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
 .pin-drawer-head .field-label { margin: 0; }
+.pin-drawer-actions { display: flex; }
 .pin-icon-button { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
 .pin-rows {
   flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
@@ -516,3 +528,14 @@ button.chip { cursor: pointer; pointer-events: auto; }
   cursor: pointer; pointer-events: auto;
 }
 .pin-remove-all:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+
+.icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  box-sizing: border-box; width: var(--icon-target); height: var(--icon-target);
+  min-width: var(--icon-target); min-height: var(--icon-target); padding: 0;
+}
+.icon-button .icon {
+  display: block; flex: none; width: var(--icon-size); height: var(--icon-size);
+}
+.icon-button:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+.icon-button:disabled { opacity: var(--dim); cursor: default; }
