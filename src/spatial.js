@@ -28,6 +28,14 @@ export function createPhoneHold(root, pivot) {
   };
 }
 
+const MATCH_DISTANCE = 0.05;
+const MATCH_ANGLE = THREE.MathUtils.degToRad(10);
+// Once aligned, stay aligned until clearly out, so the state doesn't flicker at the edge.
+const LEAVE_DISTANCE = 0.08;
+const LEAVE_ANGLE = THREE.MathUtils.degToRad(15);
+// The bar starts rising this far from the saved view, so walking over from the table counts.
+const FAR_DISTANCE = 1.5;
+
 export function viewpointAlignment(current, saved) {
   const position = new THREE.Vector3().fromArray(current.p);
   const direction = new THREE.Vector3(0, 0, -1)
@@ -36,10 +44,16 @@ export function viewpointAlignment(current, saved) {
     .applyQuaternion(new THREE.Quaternion().fromArray(saved.q).normalize());
   const distance = position.distanceTo(new THREE.Vector3().fromArray(saved.p));
   const angle = direction.angleTo(targetDirection);
-  const aligned = distance <= 0.05 && angle <= THREE.MathUtils.degToRad(10);
-  const positionScore = THREE.MathUtils.clamp(1 - (distance - 0.05) / 0.45, 0, 1);
-  const angleScore = THREE.MathUtils.clamp(
-    1 - (angle - THREE.MathUtils.degToRad(10)) / THREE.MathUtils.degToRad(80), 0, 1);
-  const score = aligned ? 100 : Math.min(99, Math.round(Math.min(positionScore, angleScore) * 100));
+  const aligned = distance <= MATCH_DISTANCE && angle <= MATCH_ANGLE;
+  const positionScore = THREE.MathUtils.clamp(
+    1 - (distance - MATCH_DISTANCE) / (FAR_DISTANCE - MATCH_DISTANCE), 0, 1);
+  const angleScore = THREE.MathUtils.clamp(1 - (angle - MATCH_ANGLE) / (Math.PI - MATCH_ANGLE), 0, 1);
+  // Position matters most; facing the wrong way holds the bar back but doesn't zero it.
+  const score = aligned ? 100 : Math.min(99, Math.round(positionScore * (0.5 + 0.5 * angleScore) * 100));
   return { distance, angle, aligned, score };
+}
+
+export function alignmentState(wasAligned, { distance, angle, aligned }) {
+  if (wasAligned) return distance <= LEAVE_DISTANCE && angle <= LEAVE_ANGLE;
+  return aligned;
 }

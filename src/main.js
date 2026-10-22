@@ -10,7 +10,7 @@ import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
-import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint } from "./viewpoint.js";
+import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint, clearViewpoint } from "./viewpoint.js";
 import { initPins } from "./pins.js";
 import { initGrab } from "./grab.js";
 import { createSketch, initSketchInput } from "./sketch.js";
@@ -55,7 +55,6 @@ on("aligned", (msg) => {
 
 onStatus(setStatus);
 on("hello", (msg) => {
-  console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
   if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
@@ -65,7 +64,10 @@ on("hello", (msg) => {
     grab.resend();
     resendViewpoint();
   }
-  else if (msg.role === "expert") pins.clearRemote();
+  else if (msg.role === "expert") {
+    pins.clearRemote();
+    clearViewpoint();
+  }
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
@@ -93,6 +95,7 @@ onSessionEnd(() => {
 // Without AR (desktop testing) the orbit camera stands in for the phone.
 const round = (n) => Math.round(n * 1e4) / 1e4;
 let lastPoseSent = 0;
+const localPosition = new THREE.Vector3(); // this phone, for the ghosts' fade
 let hasAR = true;
 arSupported.then((ok) => { hasAR = ok; });
 function sendPose() {
@@ -114,8 +117,10 @@ startLoop((time, frame) => {
   setCrosshair(ready, centreAim.update(activeCamera, ready));
   sketchInput.update(time);
   sendPose();
-  ghosts.expert.update();
-  ghosts.novice.update();
+  const local = getLocalPose();
+  const here = local ? localPosition.fromArray(local.p) : null;
+  ghosts.expert.update(here);
+  ghosts.novice.update(here);
   grab.update(activeCamera, ready);
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();

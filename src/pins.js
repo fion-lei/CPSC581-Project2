@@ -42,6 +42,7 @@ const INSIDE_EDGE = 0.01;   // m; a wall this close beside the hit suggests Shar
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const round = (n) => Math.round(n * 1e4) / 1e4;
+const validVector = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 const easeOut = (t) => 1 - (1 - t) ** 3;
 // Pins and the beam must never catch the centre ray (crosshair, aiming)
 const noRaycast = () => {};
@@ -374,7 +375,7 @@ export function initPins({ expertGhost, send, getRole }) {
     });
   }
 
-  // Cancel (or a mode change from a room switch, or the AR session ending): a draft
+  // Cancel (or a mode change from a room switch, Re-place, or the AR session ending): a draft
   // was never sent, so it just goes. The sheet hides the mode bar, so the expert
   // can't switch mode while it is open.
   function closeSheet() {
@@ -559,7 +560,8 @@ export function initPins({ expertGhost, send, getRole }) {
   // reconnecting (no beam, no toast; a = 1 if we already confirmed it)
   function addRemote({ id, no, p, n, problem, fix = null, value = null, r, a }) {
     const mark = { problem, fix, value };
-    if (!validMark(mark) || !Array.isArray(p) || !Array.isArray(n)) return;
+    if (typeof id !== "string" || !Number.isInteger(no) || !validMark(mark)
+      || !validVector(p) || !validVector(n)) return;
     const known = pins.get(id);
     if (known) {
       if (Object.entries(mark).every(([key, val]) => known[key] === val)) return;
@@ -692,6 +694,8 @@ export function initPins({ expertGhost, send, getRole }) {
     ready = aimReady;
     hit = aimHit;
     if (holding !== null && !canAim()) cancel();
+    // Re-place hides the part, so a sheet open on it can't stay
+    if (!isPlaced()) closeSheet();
     drawer.setVisible(isNovice() ? isPlaced() : canAim() && !sheet.isOpen());
 
     aimAtPins(cam);

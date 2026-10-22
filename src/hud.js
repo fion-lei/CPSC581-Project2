@@ -35,6 +35,7 @@ let toastAnim = null;
 let toastOnClose = null;
 let pill = null;
 let pillText = null;
+let pillDot = null;
 let pillAction = null;
 let pillTimer = 0;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -220,10 +221,13 @@ export function hideToast() {
 function makePill(hud) {
   pill = el("div", "pill");
   pill.setAttribute("role", "status");
+  pillDot = el("span", "pill-dot");
+  pillDot.setAttribute("aria-hidden", "true");
+  pillDot.hidden = true;
   pillText = el("span", "pill-text");
   pillAction = el("button", "pill-action");
   pillAction.type = "button";
-  pill.append(pillText, pillAction);
+  pill.append(pillDot, pillText, pillAction);
   pill.addEventListener("beforexrselect", (e) => e.preventDefault());
   pill.addEventListener("keydown", (e) => e.stopPropagation());
   pill.hidden = true;
@@ -231,11 +235,14 @@ function makePill(hud) {
 }
 
 // White confirmation pill, top-centre: "View sent to novice". With an action
-// ({ label, onClick }) it carries a button, e.g. Undo. Hides after ms.
-export function showPill(text, action = null, ms = 2000) {
+// ({ label, onClick }) it carries a button, e.g. Undo. Hides after ms. A dot role
+// ("novice") marks news from the other person with their colour.
+export function showPill(text, action = null, ms = 2000, dot = null) {
   if (!pill) return;
   clearTimeout(pillTimer);
   pillText.textContent = text;
+  pillDot.hidden = !dot;
+  pillDot.className = dot ? `pill-dot is-${dot}` : "pill-dot";
   pill.classList.toggle("has-action", !!action);
   pillAction.hidden = !action;
   pillAction.textContent = action?.label ?? "";
