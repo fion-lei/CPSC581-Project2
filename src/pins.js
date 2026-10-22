@@ -246,12 +246,13 @@ export function initPins({ expertGhost, send, getRole }) {
     fading.add(pin);
   }
 
-  function land(pin, now) {
+  function land(pin, now, { notify = false } = {}) {
     pin.object.visible = true;
     pin.pulseAt = now;
     if (isNovice()) {
       play("pin");
       navigator.vibrate?.(40);
+      if (notify) toast.show(pin);
     }
   }
 
@@ -596,14 +597,13 @@ export function initPins({ expertGhost, send, getRole }) {
     }
     setHidden(false);
     renderDrawer();
-    toast.show(pin);
     const now = performance.now();
     if (!expertGhost.visible) {
-      land(pin, now);
+      land(pin, now, { notify: true });
       return;
     }
     // A newer shot replaces a beam still in flight; that pin lands now
-    if (remotePin && !remotePin.object.visible) land(remotePin, now);
+    if (remotePin && !remotePin.object.visible) land(remotePin, now, { notify: true });
     remotePin = pin;
     pin.landAt = now + REMOTE_BEAM_MS;
     beamState = "remote";
@@ -660,7 +660,7 @@ export function initPins({ expertGhost, send, getRole }) {
       expertGhost.getWorldPosition(beamFrom);
       remotePin.object.getWorldPosition(beamTo);
       if (now >= remotePin.landAt) {
-        land(remotePin, now);
+        land(remotePin, now, { notify: true });
         remotePin = null;
         fadeBeam(now);
       }
