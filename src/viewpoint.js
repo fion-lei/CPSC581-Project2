@@ -154,7 +154,7 @@ export function receiveViewpoint(msg) {
   savedGhost.object.position.fromArray(msg.p);
   savedGhost.object.quaternion.fromArray(msg.q).normalize();
   updateToggle();
-  if (!restored) showPill("Expert saved a new view");
+  if (!restored) showPill("Expert saved a new view", null, 2000, "expert");
 }
 
 // Novice: the expert (re)connected and resends its saved view, if it still has one.
