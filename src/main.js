@@ -5,19 +5,21 @@ import { renderer, scene, camera, startLoop } from "./scene.js";
 import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
-import { connect, disconnect, on, onStatus, send, getRole } from "./net.js";
+import { connect, disconnect, on, onStatus, send, getRole, getRemoteRole } from "./net.js";
 import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
-import { createCentreAim } from "./expert-tools.js";
+import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
 import { initViewpoint, updateViewpoint, receiveViewpoint, getSavedPose } from "./viewpoint.js";
 import { initPins } from "./pins.js";
 import { initGrab } from "./grab.js";
+import { createSketch, initSketchInput } from "./sketch.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
 
 scene.add(modelRoot);
+const sketch = createSketch({ modelRoot, send, getRole });
 
 // One ghost per role. Poses go to the other role's ghost, so this phone's own
 // ghost never gets any and stays hidden.
@@ -46,9 +48,7 @@ onStatus(setStatus);
 on("hello", (msg) => {
   console.log(`hello from ${msg.role}`);
   setPeerRole(msg.role);
-  const saved = getSavedPose();
-  if (msg.role === "novice" && saved) send({ t: "viewpoint", p: saved.p, q: saved.q });
-  // The novice (re)joined: give it every pin placed so far
+  if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
   // comes first on the same ordered channel, so the novice clears, then refills.
   if (getRole() === "expert") {pins.resend(); grab.resend();}
@@ -58,8 +58,12 @@ on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
 on("ack", pins.onAck);
-on("grab", grab.receive);
+for (const type of ["stroke", "clear"]) on(type, (msg) => {
+  if (getRemoteRole() === "expert") sketch.receive(msg);
+});
 initHud({ connect, disconnect, onEnter: enterAR, arSupported });
+const sketchInput = initSketchInput({ sketch, renderer, camera, modelRoot, modelPivot,
+  controls, getRole, getMode, onModeChange, isPlaced, isTracking });
 
 onSessionStart(() => {
   grid.visible = false;
@@ -88,13 +92,14 @@ function sendPose() {
   send({ t: "pose", p: pose.p.map(round), q: pose.q.map(round) });
 }
 
-startLoop((_time, frame) => {
+startLoop((time, frame) => {
   if (renderer.xr.isPresenting) updateAR(frame);
-  else controls.update();
+  else if (controls.enabled) controls.update();
   const ready = getRole() === "expert" && isPlaced()
     && (!renderer.xr.isPresenting || isTracking());
   const activeCamera = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   setCrosshair(ready, centreAim.update(activeCamera, ready));
+  sketchInput.update(time);
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
