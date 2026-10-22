@@ -541,3 +541,9 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .icon-button:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
 .icon-button:disabled { opacity: var(--dim); cursor: default; }
+
+/* Grab: put the part back. Right edge at mid-height, like the pin tab (never both at once) */
+.grab-reset {
+  position: absolute; right: var(--edge-right); top: 50%;
+  transform: translateY(-50%);
+}
