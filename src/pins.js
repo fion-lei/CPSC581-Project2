@@ -42,6 +42,7 @@ const INSIDE_EDGE = 0.01;   // m; a wall this close beside the hit suggests Shar
 
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const round = (n) => Math.round(n * 1e4) / 1e4;
+const validVector = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 const easeOut = (t) => 1 - (1 - t) ** 3;
 // Pins and the beam must never catch the centre ray (crosshair, aiming)
 const noRaycast = () => {};
@@ -559,7 +560,8 @@ export function initPins({ expertGhost, send, getRole }) {
   // reconnecting (no beam, no toast; a = 1 if we already confirmed it)
   function addRemote({ id, no, p, n, problem, fix = null, value = null, r, a }) {
     const mark = { problem, fix, value };
-    if (!validMark(mark) || !Array.isArray(p) || !Array.isArray(n)) return;
+    if (typeof id !== "string" || !Number.isInteger(no) || !validMark(mark)
+      || !validVector(p) || !validVector(n)) return;
     const known = pins.get(id);
     if (known) {
       if (Object.entries(mark).every(([key, val]) => known[key] === val)) return;
