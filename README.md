@@ -10,14 +10,22 @@ to guide a novice through a CAD part remotely in AR.
 - **Shared model space:** each person places the part on their own table. Shared
   guidance stays positioned relative to the part.
 - **Ghost phones:** each person sees a translucent ghost of the other's phone.
-  Orange represents the expert and blue represents the novice.
+  Orange represents the expert and blue represents the novice. A ghost fades
+  out as you step into it, so it never covers your screen.
 - **Grab and turn:** the expert moves and rotates the part using their phone.
   The novice's copy follows.
 - **Mid-air sketching:** the expert draws on the part or in the air to guide the novice.
 - **Laser pins with fixes:** the expert marks a problem and suggests a fix.
-  The novice confirms it with a check.
-- **Viewpoint matching:** the expert saves an angle. An arrow, alignment bar,
-  rising tone, and haptics guide the novice into the same view.
+  The novice confirms it with a check, and the pin turns blue on both devices.
+  Either person can hide the pins to see the bare part.
+- **Viewpoint matching:** the expert saves an angle. An arrow, alignment bar and
+  rising tone guide the novice into the same view. Once aligned, the novice's
+  phone buzzes, blue brackets frame the view, and the expert is notified.
+- **Help signal:** the novice taps **Help** to tell the expert they are stuck.
+- **Event sounds:** short synthesized sounds play for grabs, pins, strokes,
+  views, alignment and confirmations, with a mute toggle.
+- **Reconnect:** when the novice rejoins, the expert's pins, strokes, part
+  position and saved view are sent again.
 
 ## Requirements
 
@@ -45,13 +53,20 @@ without any local setup.
      turn it on both devices. Release to set it down. Use **Reset part** to reset it.
    - **Pin:** aim at the part, hold and release, choose a problem and fix, then
      tap **Send pin**. The novice can find the pin and confirm it with the check button.
+     Open the pin drawer to see every pin; the eye icon hides or shows them on
+     your own device.
    - **Draw:** hold the screen and move the phone to sketch on the part or in the
      air. Use Undo to remove the latest stroke or the trash icon to clear all
      strokes on both devices.
    - **View:** tap View to save your current angle. The novice follows the arrow
      toward the saved ghost camera and turns to match its direction, using the
-     alignment bar and rising tone as guidance.
-5. Tap **Re-place** to choose a new table position or **Stop AR** to leave AR.
+     alignment bar and rising tone as guidance. When the views match, the
+     novice's phone buzzes and the expert sees **Novice reached your view**.
+   - **Help:** the novice taps **Help** at the top of the screen to alert the
+     expert. It can be used again after 10 seconds.
+5. Tap the speaker chip to mute or unmute sounds. The setting is remembered on
+   each device.
+6. Tap **Re-place** to choose a new table position or **Stop AR** to leave AR.
 
 If the connection drops, the app tries to reconnect automatically. If it stays
 on **Connecting** or **Waiting**, check the room code. Some networks block
@@ -80,6 +95,8 @@ Open the HTTPS address printed by Vite.
   Choose **Continue without AR** if prompted.
 - **Phone:** join the development computer's Wi-Fi and open Vite's HTTPS network
   address. Only accept the certificate warning for your own server.
+- **Debug readout:** add `?debug` to the URL to show the **DBG** button with
+  the live pose readout.
 
 ### Build for production
 
