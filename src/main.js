@@ -114,8 +114,10 @@ startLoop((time, frame) => {
   setCrosshair(ready, centreAim.update(activeCamera, ready));
   sketchInput.update(time);
   sendPose();
-  ghosts.expert.update();
-  ghosts.novice.update();
+  const local = getLocalPose();
+  const localPosition = local && new THREE.Vector3().fromArray(local.p);
+  ghosts.expert.update(localPosition);
+  ghosts.novice.update(localPosition);
   grab.update(activeCamera, ready);
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
