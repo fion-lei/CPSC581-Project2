@@ -4,6 +4,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { lineMaterial } from "./ghost.js";
 import { UNDO_ICON, TRASH_ICON, setIconButton } from "./icons.js";
 import { tokenColor } from "./tokens.js";
+import { play } from "./audio.js";
 
 export const MIN_POINT_DISTANCE = 0.005;
 export const AIR_DISTANCE = 0.15;
@@ -177,7 +178,10 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
       }
       const first = active.points.length === 0;
       append(active, [local.toArray().map((n) => Math.round(n * 1e5) / 1e5)]);
-      if (first) notify();
+      if (first) {
+        play("stroke", { quiet: true });
+        notify();
+      }
       return true;
     },
     update(time) {
@@ -228,6 +232,7 @@ export function createSketch({ modelRoot, send, getRole, makeId = () => crypto.r
       if (!stroke) stroke = create(msg.id);
       if (!stroke) return false;
       append(stroke, msg.points);
+      if (msg.start === 0) play("stroke");
       notify();
       return true;
     },

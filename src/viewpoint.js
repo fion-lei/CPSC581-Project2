@@ -9,6 +9,7 @@ import { getMode } from "./expert-tools.js";
 import { layoutBottom, showPill } from "./hud.js";
 import { ARROW_ICON, CAMERA_ICON, STEP_ICON, setIconButton } from "./icons.js";
 import { validPose, viewpointAlignment } from "./spatial.js";
+import { play } from "./audio.js";
 
 const AXIS_COS = 0.9;
 const target = new THREE.Vector3();
@@ -56,6 +57,7 @@ function saveViewpoint() {
   }
   savedPose = { id: `${Date.now().toString(36)}-${++sequence}`, ...pose };
   resendViewpoint();
+  play("view", { quiet: true });
   flash();
   showPill(getStatus() === "connected" ? "View sent to novice" : "View saved for when novice connects");
 }
@@ -133,6 +135,7 @@ export function receiveViewpoint(msg) {
   savedGhost.object.position.fromArray(msg.p);
   savedGhost.object.quaternion.fromArray(msg.q).normalize();
   updateToggle();
+  play("view");
   showPill("Expert saved a new view");
 }
 
@@ -168,6 +171,7 @@ export function updateViewpoint(time) {
   if (alignment.aligned && matchedId !== savedPose.id) {
     matchedId = savedPose.id;
     navigator.vibrate?.(80);
+    play("aligned", { quiet: true });
     send({ t: "aligned", id: savedPose.id });
     showPill("View matched");
   }
@@ -227,5 +231,7 @@ export function resendViewpoint() {
 }
 
 export function receiveAlignment({ id }) {
-  if (savedPose?.id === id) showPill("Novice matched your view");
+  if (savedPose?.id !== id) return;
+  play("aligned");
+  showPill("Novice matched your view");
 }
