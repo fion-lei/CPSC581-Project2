@@ -40,9 +40,15 @@
   --pin-drawer-width: min(220px, 60vw);
   --icon-size: 20px;
   --icon-target: 48px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-panel: 14px;
+  --outline-width: 2px;
+  --progress-track: #3A4251;
+  --progress-fill: #60A5FA;
+  --hud-max-width: 440px;
 }
-
-
 
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #111; color: var(--hud-text);
@@ -119,9 +125,9 @@ button.chip { cursor: pointer; pointer-events: auto; }
 
 /* Progress bar: label above an 8 px track. Set the fill's width (0–100%). */
 .progress-label { margin-bottom: 8px; font: 500 14px/1.2 var(--font-ui); }
-.progress-track { height: 8px; border-radius: 4px; background: #3A4251; overflow: hidden; }
+.progress-track { height: 8px; border-radius: 4px; background: var(--progress-track); overflow: hidden; }
 .progress-fill {
-  height: 100%; width: 0; border-radius: 4px; background: #60A5FA;
+  height: 100%; width: 0; border-radius: 4px; background: var(--progress-fill);
   transition: width 200ms var(--ease-out);
 }
 
@@ -306,6 +312,11 @@ button.chip { cursor: pointer; pointer-events: auto; }
 .sketch-action { min-width: 48px; min-height: 48px; padding: 0; }
 .sketch-actions .sketch-action svg { width: 20px; height: 20px; }
 .sketch-action:disabled { opacity: var(--dim); }
+
+.tool-side-action {
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  z-index: 2;
+}
 
 /* Toast slot: bottom for the novice, just above the mode bar for the expert.
    hud.js sets --toast-offset and --bottom-clearance to stack the controls. */

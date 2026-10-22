@@ -1,4 +1,4 @@
-import { createElement, Check, Circle, Crosshair, Eye, EyeOff, Pin, Trash2, Undo2, X } from "lucide";
+import { createElement, ArrowUp, Camera, Check, ChevronsUp, Circle, Crosshair, Eye, EyeOff, Pin, RotateCcw, Trash2, Undo2, X } from "lucide";
 
 function markup(node) {
   return createElement(node, {
@@ -16,6 +16,10 @@ export const PIN_ICON = markup(Pin);
 export const TRASH_ICON = markup(Trash2);
 export const UNDO_ICON = markup(Undo2);
 export const CLOSE_ICON = markup(X);
+export const CAMERA_ICON = markup(Camera);
+export const RESET_ICON = markup(RotateCcw);
+export const ARROW_ICON = markup(ArrowUp);
+export const STEP_ICON = markup(ChevronsUp);
 
 export function setIconButton(button, image, label) {
   button.type = "button";
