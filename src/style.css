@@ -40,6 +40,8 @@
   --pin-drawer-width: min(220px, 60vw);
 }
 
+
+
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: #111; color: var(--hud-text);
   font-family: var(--font-ui);
@@ -516,3 +518,13 @@ button.chip { cursor: pointer; pointer-events: auto; }
   cursor: pointer; pointer-events: auto;
 }
 .pin-remove-all:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+
+/* Reset object after grab button */
+.grab-reset {
+  position: absolute; right: var(--edge-right); top: 50%;
+  transform: translateY(-50%);
+}
+
+.view-icon { width: 48px; padding: 0; }
+.view-icon svg { width: 24px; height: 24px; }
+
