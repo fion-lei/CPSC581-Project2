@@ -1,209 +1,197 @@
 import * as THREE from "three";
 import { renderer, camera } from "./scene.js";
 import { modelRoot, modelPivot } from "./model.js";
-import { getMode, onModeChange } from "./expert-tools.js";
-import { showToast, hideToast } from "./hud.js";
+import { createPartRaycast, getMode, onModeChange } from "./expert-tools.js";
+import { showToast, hideToast, showPill } from "./hud.js";
+import { getRole, onStatus } from "./net.js";
+import { RESET_ICON, setIconButton } from "./icons.js";
+import { createPhoneHold, validPose } from "./spatial.js";
 
-const SEND_MS = 50;       // ~20 grab messages a second while rotating
-const SMOOTHING = 0.3;    // novice: ease toward the latest pose per frame
-const RAD_PER_PX = 0.008; // desktop: drag distance to rotation
-const CENTRE = new THREE.Vector3(0, 0.07, 0); // part's visual centre, modelPivot space
-
+const SEND_MS = 50;
+const SMOOTHING = 0.3;
+const RAD_PER_PX = 0.008;
+const CENTRE = new THREE.Vector3(0, 0.07, 0);
 const round = (n) => Math.round(n * 1e4) / 1e4;
 
-// Grab mode: rotate the part, nothing else. It always turns about its own centre.
-// WebXR: hold anywhere on the screen and turn the phone; the part turns by the same amount.
-// Desktop: drag with the left mouse button.
-// Only modelPivot's rotation changes; pins (its children) turn with it.
-// send = net.js send; controls = the desktop OrbitControls.
 export function initGrab({ send, controls }) {
   const canvas = renderer.domElement;
-
+  const hud = document.getElementById("hud");
+  const { raycaster, intersect } = createPartRaycast(modelRoot, modelPivot);
+  const phoneHold = createPhoneHold(modelRoot, modelPivot);
   const qa = new THREE.Quaternion();
   const qb = new THREE.Quaternion();
   const rootQuat = new THREE.Quaternion();
-  const startCam = new THREE.Quaternion();  // AR: phone's orientation at the press
-  const startQuat = new THREE.Quaternion(); // AR: part's orientation at the press
   const axis = new THREE.Vector3();
   const before = new THREE.Vector3();
   const after = new THREE.Vector3();
+  const pointer = new THREE.Vector2();
   const lastPointer = new THREE.Vector2();
-
+  const rayMatrix = new THREE.Matrix4();
   const targetPos = new THREE.Vector3();
   const targetQuat = new THREE.Quaternion();
-
-  let ready = false;   // expert, part placed, tracking (from main.js each frame)
-  let hit = null;      // centre-ray hit on the part (from main.js each frame)
-  let holding = null;  // pointerId (desktop) or XRInputSource (AR)
-  let moved = false;   // expert: the part has been rotated since the last reset
-  let remote = false;  // novice: a grab pose has arrived
-  let hintShown = false;
+  const identity = new THREE.Quaternion();
+  let ready = false;
+  let holding = null;
+  let remote = false;
+  let session = null;
   let lastSent = 0;
+  let orbitBeforeHold = null;
 
-  const canGrab = () => ready && getMode() === "grab";
+  const canGrab = () => ready && getMode() === "grab"
+    && !hud.querySelector(".expert-toolbar")?.hidden;
 
-  // Reset button: only while Grab is the active expert mode
   const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.className = "btn grab-reset";
-  resetButton.innerHTML =
-  `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-     <path d="M3 3v5h5"/>
-   </svg>`;
-resetButton.setAttribute("aria-label", "Reset part");
-resetButton.title = "Reset part";
+  resetButton.className = "btn tool-side-action grab-reset";
+  setIconButton(resetButton, RESET_ICON, "Reset part");
   resetButton.hidden = true;
   resetButton.addEventListener("beforexrselect", (e) => e.preventDefault());
+  resetButton.addEventListener("keydown", (e) => e.stopPropagation());
   resetButton.addEventListener("click", () => {
     cancel();
     modelPivot.position.set(0, 0, 0);
     modelPivot.quaternion.identity();
-    moved = false;
-    sendPivot(); // the novice eases back too
+    sendPivot();
+    showPill("Part reset");
   });
-  document.getElementById("hud").appendChild(resetButton);
+  hud.appendChild(resetButton);
 
   function sendPivot() {
-    send({
-      t: "grab",
-      p: modelPivot.position.toArray().map(round),
-      q: modelPivot.quaternion.toArray().map(round),
-    });
-  }
-
-  // Set the part's orientation, shifting its position just enough that its centre
-  // stays where it was (so it spins in place rather than swinging about its base)
-  function setRotation(q) {
-    before.copy(CENTRE).applyQuaternion(modelPivot.quaternion);
-    modelPivot.quaternion.copy(q);
-    after.copy(CENTRE).applyQuaternion(modelPivot.quaternion);
-    modelPivot.position.add(before).sub(after);
-    moved = true;
-  }
-
-  // A world-space turn, re-expressed in modelRoot space
-  function toLocalTurn(worldTurn) {
-    modelRoot.getWorldQuaternion(rootQuat);
-    return worldTurn.premultiply(qb.copy(rootQuat).invert()).multiply(rootQuat);
+    send({ t: "grab", p: modelPivot.position.toArray().map(round),
+      q: modelPivot.quaternion.toArray().map(round) });
   }
 
   function startHold(source) {
     if (!canGrab() || holding !== null) return false;
-    if (!hit) {
-      showToast("Aim at the part", "Put the crosshair on it, then hold", 2000);
+    if (!intersect()) {
+      showToast("Press on the part", "Hold it, then move or turn your phone", 2000);
       return false;
     }
     holding = source;
     hideToast();
-    if (renderer.xr.isPresenting) {
-      renderer.xr.getCamera().getWorldQuaternion(startCam);
-      startQuat.copy(modelPivot.quaternion);
+    if (renderer.xr.isPresenting) phoneHold.capture(renderer.xr.getCamera());
+    else {
+      orbitBeforeHold = controls.enabled;
+      controls.enabled = false;
     }
     return true;
   }
 
   function endHold(source) {
     if (holding === null || holding !== source) return;
+    const id = holding;
     holding = null;
-    sendPivot(); // final resting pose
+    if (typeof id === "number" && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    if (orbitBeforeHold !== null) {
+      controls.enabled = !renderer.xr.isPresenting && orbitBeforeHold;
+      orbitBeforeHold = null;
+    }
+    sendPivot();
   }
   const cancel = () => endHold(holding);
 
-  // WebXR: hold anywhere on the screen. HUD controls stop their own touches with
-  // beforexrselect, so tapping a mode button never grabs.
+  function xrStart(e) {
+    if (!canGrab() || holding !== null) return;
+    const pose = e.frame.getPose(e.inputSource.targetRaySpace, renderer.xr.getReferenceSpace());
+    if (!pose) {
+      showToast("Tracking unavailable", "Move your phone slowly and try again", 2000);
+      return;
+    }
+    rayMatrix.fromArray(pose.transform.matrix);
+    raycaster.ray.origin.setFromMatrixPosition(rayMatrix);
+    raycaster.ray.direction.set(0, 0, -1).transformDirection(rayMatrix);
+    startHold(e.inputSource);
+  }
+  function xrEnd(e) { endHold(e.inputSource); }
+  function sourcesChanged(e) { if (Array.from(e.removed).includes(holding)) cancel(); }
+  function detachSession() {
+    if (!session) return;
+    session.removeEventListener("selectstart", xrStart);
+    session.removeEventListener("selectend", xrEnd);
+    session.removeEventListener("inputsourceschange", sourcesChanged);
+    session = null;
+  }
   renderer.xr.addEventListener("sessionstart", () => {
-    const session = renderer.xr.getSession();
-    session.addEventListener("selectstart", (e) => startHold(e.inputSource));
-    session.addEventListener("selectend", (e) => endHold(e.inputSource));
-  });
-  renderer.xr.addEventListener("sessionend", () => {
     cancel();
-    modelPivot.position.set(0, 0, 0);
-    modelPivot.quaternion.identity();
-    moved = remote = false;
+    detachSession();
+    session = renderer.xr.getSession();
+    session.addEventListener("selectstart", xrStart);
+    session.addEventListener("selectend", xrEnd);
+    session.addEventListener("inputsourceschange", sourcesChanged);
   });
+  renderer.xr.addEventListener("sessionend", () => { cancel(); detachSession(); });
 
-  // Desktop: the orbit controls are off in Grab mode, so a drag only turns the part
   canvas.addEventListener("pointerdown", (e) => {
-    if (renderer.xr.isPresenting || e.button !== 0 || !startHold(e.pointerId)) return;
+    if (renderer.xr.isPresenting || e.button !== 0 || !canGrab()
+      || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const rect = canvas.getBoundingClientRect();
+    pointer.set((e.clientX - rect.left) / rect.width * 2 - 1,
+      -(e.clientY - rect.top) / rect.height * 2 + 1);
+    camera.updateWorldMatrix(true, false);
+    raycaster.setFromCamera(pointer, camera);
+    if (!startHold(e.pointerId)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
     lastPointer.set(e.clientX, e.clientY);
     canvas.setPointerCapture(e.pointerId);
-  });
+  }, true);
   canvas.addEventListener("pointermove", (e) => {
     if (e.pointerId !== holding) return;
-    // Horizontal drag turns about the camera's up axis, vertical about its right axis
-    camera.updateMatrixWorld();
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    camera.getWorldQuaternion(qa);
     const dx = e.clientX - lastPointer.x;
     const dy = e.clientY - lastPointer.y;
     lastPointer.set(e.clientX, e.clientY);
-    qa.setFromAxisAngle(axis.set(0, 1, 0).applyQuaternion(camera.quaternion), dx * RAD_PER_PX);
-    qb.setFromAxisAngle(axis.set(1, 0, 0).applyQuaternion(camera.quaternion), dy * RAD_PER_PX);
-    qa.multiply(qb);
-    setRotation(toLocalTurn(qa).multiply(modelPivot.quaternion));
-  });
-  canvas.addEventListener("pointerup", (e) => endHold(e.pointerId));
-  canvas.addEventListener("pointercancel", (e) => endHold(e.pointerId));
-
+    axis.set(0, 1, 0).applyQuaternion(qa);
+    qb.setFromAxisAngle(axis, dx * RAD_PER_PX);
+    axis.set(1, 0, 0).applyQuaternion(qa);
+    qa.setFromAxisAngle(axis, dy * RAD_PER_PX);
+    qb.multiply(qa);
+    modelRoot.getWorldQuaternion(rootQuat);
+    qa.copy(rootQuat).invert().multiply(qb).multiply(rootQuat).multiply(modelPivot.quaternion);
+    before.copy(CENTRE).applyQuaternion(modelPivot.quaternion);
+    after.copy(CENTRE).applyQuaternion(qa);
+    modelPivot.position.add(before).sub(after);
+    modelPivot.quaternion.copy(qa);
+  }, true);
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    canvas.addEventListener(type, (e) => {
+      if (e.pointerId !== holding) return;
+      e.stopImmediatePropagation();
+      endHold(e.pointerId);
+    }, true);
+  }
   window.addEventListener("blur", cancel);
   document.addEventListener("visibilitychange", () => { if (document.hidden) cancel(); });
+  onStatus((status) => { if (status !== "connected") cancel(); });
+  onModeChange(cancel);
 
-  onModeChange((mode) => {
-    cancel();
-    // The orbit camera must not turn the view while Grab turns the part
-    if (controls) controls.enableRotate = controls.enablePan = mode !== "grab";
-    if (mode === "grab") {
-      showToast("Grab",
-        renderer.xr.isPresenting
-          ? "Aim at the part, hold the screen, then turn your phone"
-          : "Aim at the part, then drag to rotate it",
-        4000);
-      hintShown = true;
-    } else if (hintShown) {
-      hideToast();
-      hintShown = false;
+  function receive(msg) {
+    if (!validPose(msg)) {
+      console.warn("Ignoring invalid grab pose", msg);
+      return;
     }
-  });
-
-  // Novice: latest part pose from the expert
-  function receive({ p, q }) {
-    if (!Array.isArray(p) || !Array.isArray(q)) return;
-    targetPos.fromArray(p);
-    targetQuat.fromArray(q);
+    targetPos.fromArray(msg.p);
+    targetQuat.fromArray(msg.q).normalize();
     remote = true;
   }
 
-  // Expert: send the current part pose again, e.g. when the novice (re)joins
-  function resend() {
-    if (moved) sendPivot();
-  }
-
-  // Once per frame. cam = the camera rendering this frame; aimReady and aimHit come
-  // from the centre ray in main.js.
-  function update(cam, aimReady, aimHit) {
+  function update(cam, aimReady) {
     ready = aimReady;
-    hit = aimHit;
     resetButton.hidden = !canGrab();
+    resetButton.disabled = holding === null && modelPivot.position.lengthSq() < 1e-10
+      && modelPivot.quaternion.angleTo(identity) < 1e-5;
     if (holding !== null && !canGrab()) cancel();
-
     if (holding !== null) {
-      if (renderer.xr.isPresenting) {
-        // The phone's turn since the press, applied to the part's orientation at the press
-        cam.getWorldQuaternion(qa);
-        qa.multiply(qb.copy(startCam).invert());
-        setRotation(toLocalTurn(qa).multiply(startQuat));
-      }
+      if (renderer.xr.isPresenting) phoneHold.update(cam);
       const now = performance.now();
-      if (now - lastSent >= SEND_MS) {
-        lastSent = now;
-        sendPivot();
-      }
-    } else if (remote) {
+      if (now - lastSent >= SEND_MS) { lastSent = now; sendPivot(); }
+    } else if (remote && getRole() === "novice") {
       modelPivot.position.lerp(targetPos, SMOOTHING);
       modelPivot.quaternion.slerp(targetQuat, SMOOTHING);
     }
   }
 
-  return { update, receive, resend };
+  // Always replay, including identity after an offline reset.
+  return { update, receive, resend: sendPivot };
 }

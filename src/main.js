@@ -43,6 +43,9 @@ initDebug();
 initViewpoint();
 
 on("viewpoint", receiveViewpoint);
+on("grab", (msg) => {
+  if (getRole() === "novice" && getRemoteRole() === "expert") grab.receive(msg);
+});
 
 
 onStatus(setStatus);
@@ -52,14 +55,16 @@ on("hello", (msg) => {
   if (msg.role === "novice") sketch.replay();
   // The novice (re)joined: give it every pin placed so far. The expert's hello
   // comes first on the same ordered channel, so the novice clears, then refills.
-  if (getRole() === "expert") {pins.resend(); grab.resend();}
+  if (getRole() === "expert" && msg.role === "novice") {
+    pins.resend();
+    grab.resend();
+  }
   else if (msg.role === "expert") pins.clearRemote();
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
 on("ack", pins.onAck);
-on("grab", grab.receive);
 for (const type of ["stroke", "clear"]) on(type, (msg) => {
   if (getRemoteRole() === "expert") sketch.receive(msg);
 });
@@ -105,7 +110,7 @@ startLoop((time, frame) => {
   sendPose();
   ghosts.expert.update();
   ghosts.novice.update();
-  grab.update(activeCamera, ready, centreAim.getHit());
+  grab.update(activeCamera, ready);
   pins.update(activeCamera, ready, centreAim.getHit());
   updateDebug();
   updateViewpoint();
