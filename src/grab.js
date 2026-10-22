@@ -72,6 +72,8 @@ export function initGrab({ send, controls }) {
     holding = source;
     hideToast();
     play("grab", { quiet: true });
+    lastSent = performance.now();
+    sendPivot();
     if (renderer.xr.isPresenting) phoneHold.capture(renderer.xr.getCamera());
     else {
       orbitBeforeHold = controls.enabled;

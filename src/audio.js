@@ -83,7 +83,7 @@ export function play(name, { quiet = false, force = false } = {}) {
   const c = ensure();
   if (!c) return;
   if (c.state !== "running") {
-    c.resume().catch(() => {});
+    c.resume().then(() => play(name, { quiet, force })).catch(() => {});
     return;
   }
 
@@ -91,7 +91,7 @@ export function play(name, { quiet = false, force = false } = {}) {
   if (nowMs - (lastPlayed.get(name) ?? -Infinity) < MIN_INTERVAL_MS) return;
   lastPlayed.set(name, nowMs);
 
-  const t0 = c.currentTime + 0.005;
+  const t0 = c.currentTime;
   const step = spec.dur / Math.max(1, spec.freqs.length);
   const len = step * 1.6;
   const peak = quiet ? QUIET : 1;
@@ -115,7 +115,7 @@ export function play(name, { quiet = false, force = false } = {}) {
   });
 }
 
-const UNLOCK_EVENTS = ["pointerup", "touchend", "click", "keydown"];
+const UNLOCK_EVENTS = ["pointerdown", "pointerup", "touchstart", "touchend", "click", "keydown"];
 function onGesture() {
   unlock().then(() => {
     if (ctx?.state === "running") {

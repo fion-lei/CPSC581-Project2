@@ -136,6 +136,7 @@ export function receiveViewpoint(msg) {
   savedGhost.object.quaternion.fromArray(msg.q).normalize();
   updateToggle();
   play("view");
+  navigator.vibrate?.(40);
   showPill("Expert saved a new view");
 }
 
@@ -233,5 +234,6 @@ export function resendViewpoint() {
 export function receiveAlignment({ id }) {
   if (savedPose?.id !== id) return;
   play("aligned");
+  navigator.vibrate?.(40);
   showPill("Novice matched your view");
 }

@@ -249,7 +249,10 @@ export function initPins({ expertGhost, send, getRole }) {
   function land(pin, now) {
     pin.object.visible = true;
     pin.pulseAt = now;
-    if (isNovice()) play("pin");
+    if (isNovice()) {
+      play("pin");
+      navigator.vibrate?.(40);
+    }
   }
 
   function fadeBeam(now) {
@@ -430,6 +433,7 @@ export function initPins({ expertGhost, send, getRole }) {
     if (!pin?.no || pin.acked) return;
     pin.acked = true;
     play("gotIt");
+    navigator.vibrate?.(40);
     if (!drawer.isOpen()) drawer.setDot(true);
     renderDrawer();
   }
@@ -574,6 +578,7 @@ export function initPins({ expertGhost, send, getRole }) {
       renderDrawer();
       if (!r) {
         play("pin");
+        navigator.vibrate?.(40);
         toast.show(known);
       }
       return;
