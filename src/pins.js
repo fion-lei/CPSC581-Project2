@@ -190,6 +190,7 @@ export function initPins({ expertGhost, send, getRole }) {
   let counter = 0;
   let lastNo = 0;
   let selectedId = null; // expert: the pin highlighted from the drawer
+  let hidden = false;    // the eye in the drawer: every pin hidden on this phone only
   let sheetPin = null;   // expert: the pin the sheet is open for
   // Novice: id → mark key of every pin we confirmed, kept across a reconnect so an
   // ack the expert never got (sent while disconnected) goes again
@@ -201,14 +202,15 @@ export function initPins({ expertGhost, send, getRole }) {
   const sheet = createPinSheet(hud);
   const drawer = createPinDrawer(hud, {
     isNovice,
-    onSelect: (id) => select(selectedId === id ? null : id),
+    onSelect: (id) => (selectedId === id ? select(null) : reveal(id)),
     onRemove: (id) => removePin(id, { undo: true }),
     onRemoveAll: confirmRemoveAll,
     onAck: ackLocal,
+    onToggleHidden: () => setHidden(!hidden),
     onOpen: openedDrawer,
     onClose: () => select(null),
   });
-  const toast = createPinToast({ onAck: ackLocal, onFind: select });
+  const toast = createPinToast({ onAck: ackLocal, onFind: reveal });
 
   const canAim = () => ready && getMode() === "pin";
   // Pins that are on both phones (drafts have no number yet), in placement order
@@ -257,7 +259,7 @@ export function initPins({ expertGhost, send, getRole }) {
 
   function renderDrawer() {
     const sent = sentPins();
-    drawer.render(sent, selectedId);
+    drawer.render(sent, selectedId, hidden);
     // Novice: a dot while some pin still waits to be confirmed
     if (isNovice()) drawer.setDot(sent.some((pin) => !pin.acked));
   }
@@ -280,11 +282,25 @@ export function initPins({ expertGhost, send, getRole }) {
     renderDrawer();
   }
 
+  // Hidden pins show again on any pin action, so nothing lands or gets picked unseen
+  function setHidden(on) {
+    if (on === hidden) return;
+    hidden = on;
+    renderDrawer();
+  }
+
+  // A row or Find picked this pin: show the pins and select it. (Opening the drawer
+  // selects too, but that alone leaves hidden pins hidden.)
+  function reveal(id) {
+    setHidden(false);
+    select(id);
+  }
+
   function tapLabel(pin) {
     if (pin.no && getMode() === "pin" && ready && pins.has(pin.id)) {
       // Expert in Pin mode: a pin in the scene selects it, like its row
       drawer.openDrawer();
-      select(pin.id);
+      reveal(pin.id);
     } else {
       labels.toggle(pin.id);
     }
@@ -391,6 +407,7 @@ export function initPins({ expertGhost, send, getRole }) {
     const data = removed.get(id);
     if (!data || pins.has(id)) return;
     removed.delete(id);
+    setHidden(false);
     const pin = addPin(makePin(data.id, data.p, data.n, data.no, data), { pulse: true });
     land(pin, performance.now());
     if (send(pinMessage(pin))) play("pin", { quiet: true });
@@ -422,6 +439,7 @@ export function initPins({ expertGhost, send, getRole }) {
   function startHold(source) {
     if (!canAim() || holding !== null || sheet.isOpen()) return false;
     holding = source;
+    setHidden(false);
     beamState = "aim";
     beam.material.opacity = 1;
     if (!drawer.isOpen()) select(null);
@@ -552,6 +570,7 @@ export function initPins({ expertGhost, send, getRole }) {
       Object.assign(known, mark);
       known.acked = false;
       acks.delete(id);
+      if (!r) setHidden(false);
       renderDrawer();
       if (!r) {
         play("pin");
@@ -570,6 +589,7 @@ export function initPins({ expertGhost, send, getRole }) {
       renderDrawer();
       return;
     }
+    setHidden(false);
     renderDrawer();
     toast.show(pin);
     const now = performance.now();
@@ -688,7 +708,7 @@ export function initPins({ expertGhost, send, getRole }) {
     updateBeam(cam, now, dt);
 
     // Keep pins out of the translucent placement preview
-    group.visible = isPlaced();
+    group.visible = isPlaced() && !hidden;
     labels.update(cam, group.visible, selectedId);
     if (!group.visible || (pins.size === 0 && fading.size === 0)) return;
     cam.getWorldPosition(camPos);

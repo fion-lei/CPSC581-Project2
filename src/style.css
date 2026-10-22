@@ -38,6 +38,16 @@
   --dim: 0.4;
   --pin-label-max: 200px;
   --pin-drawer-width: min(220px, 60vw);
+  --icon-size: 20px;
+  --icon-target: 48px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-panel: 14px;
+  --outline-width: 2px;
+  --progress-track: #3A4251;
+  --progress-fill: #60A5FA;
+  --hud-max-width: 440px;
 }
 
 html, body {
@@ -115,9 +125,9 @@ button.chip { cursor: pointer; pointer-events: auto; }
 
 /* Progress bar: label above an 8 px track. Set the fill's width (0–100%). */
 .progress-label { margin-bottom: 8px; font: 500 14px/1.2 var(--font-ui); }
-.progress-track { height: 8px; border-radius: 4px; background: #3A4251; overflow: hidden; }
+.progress-track { height: 8px; border-radius: 4px; background: var(--progress-track); overflow: hidden; }
 .progress-fill {
-  height: 100%; width: 0; border-radius: 4px; background: #60A5FA;
+  height: 100%; width: 0; border-radius: 4px; background: var(--progress-fill);
   transition: width 200ms var(--ease-out);
 }
 
@@ -125,10 +135,10 @@ button.chip { cursor: pointer; pointer-events: auto; }
    Markup: <div class="crosshair"></div>; add .is-hit when it hits the part. */
 .crosshair {
   position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
-  transform: translate(-50%, -50%); color: #fff;
-  transition: color 150ms var(--ease-out);
+  transform: translate(-50%, -50%); color: var(--hud-text); opacity: var(--dim);
+  transition: opacity 150ms var(--ease-out);
 }
-.crosshair.is-hit { color: var(--expert); }
+.crosshair.is-hit { opacity: 1; }
 .crosshair::before {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: 21.5px; height: 21.5px; transform: translate(-50%, -50%);
@@ -158,7 +168,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
   padding: 0 24px !important; border: none !important; border-radius: 14px !important;
   background: var(--hud) !important; color: var(--hud-text) !important; opacity: 1 !important;
   font: 500 15px/48px var(--font-ui) !important; text-align: center !important;
-  text-decoration: none;
+  text-decoration: none; white-space: nowrap; pointer-events: auto;
 }
 .ar-button:focus-visible { outline: 2px solid var(--hud-text) !important; outline-offset: 2px; }
 
@@ -307,6 +317,72 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .expert-tool { min-width: 0; padding: 0 8px; }
 .expert-crosshair { pointer-events: none; }
+
+/* Draw-mode actions use the same right-edge, vertically centred placement as the pin tab. */
+.sketch-actions {
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 2;
+}
+.sketch-action { min-width: 48px; min-height: 48px; padding: 0; }
+.sketch-actions .sketch-action svg { width: 20px; height: 20px; }
+.sketch-action:disabled { opacity: var(--dim); }
+
+.tool-side-action {
+  position: absolute; right: var(--edge-right); top: 50%; transform: translateY(-50%);
+  z-index: 2;
+}
+/* Novices keep their pin tab in the first right-edge action slot. */
+.view-toggle { top: calc(50% + var(--icon-target) + var(--space-2)); }
+.view-toggle.beside-drawer {
+  right: calc(var(--edge-right) + var(--pin-drawer-width) + var(--space-2));
+}
+.view-toggle.is-active { background: var(--surface); color: var(--expert-soft); }
+.view-direction {
+  position: absolute; top: var(--below-chips); left: var(--edge-left); right: var(--edge-right);
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+  box-sizing: border-box; width: max-content;
+  max-width: calc(100% - var(--edge-left) - var(--edge-right)); margin: 0 auto;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-panel);
+  background: var(--hud); pointer-events: none;
+}
+.view-direction-icon, .view-step-icon {
+  display: inline-flex; flex: none; color: var(--hud-text);
+}
+.view-direction-icon .icon, .view-step-icon .icon {
+  width: var(--icon-target); height: var(--icon-target);
+}
+.view-direction-text {
+  padding: 0; background: transparent; white-space: normal; line-height: 1.3;
+}
+#hud:has(.pill:not([hidden])) .view-direction,
+.has-pin-drawer .view-direction { visibility: hidden; }
+.view-guidance {
+  position: absolute; left: var(--edge-left); right: var(--edge-right);
+  bottom: calc(var(--edge-bottom) + var(--guidance-offset, 0px));
+  max-width: var(--hud-max-width); margin: 0 auto;
+}
+.view-progress { flex: 1; min-width: 0; }
+.view-guidance .progress-label { white-space: nowrap; }
+.pin-label.view-scene-label {
+  display: flex; align-items: center; gap: var(--space-2);
+  transform: translate(-50%, calc(-100% - var(--space-2)));
+  max-width: calc(100% - var(--edge-left) - var(--edge-right));
+  white-space: normal; pointer-events: none; cursor: default;
+}
+.view-scene-label .icon { flex: none; width: var(--icon-size); height: var(--icon-size); }
+.view-flash {
+  position: absolute; inset: var(--space-4); pointer-events: none;
+  animation: view-flash 350ms var(--ease-out) forwards;
+}
+.view-flash span {
+  position: absolute; width: var(--icon-size); height: var(--icon-size);
+  border: 0 solid var(--hud-text);
+}
+.view-flash span:nth-child(1) { top: 0; left: 0; border-top-width: var(--outline-width); border-left-width: var(--outline-width); }
+.view-flash span:nth-child(2) { top: 0; right: 0; border-top-width: var(--outline-width); border-right-width: var(--outline-width); }
+.view-flash span:nth-child(3) { bottom: 0; left: 0; border-bottom-width: var(--outline-width); border-left-width: var(--outline-width); }
+.view-flash span:nth-child(4) { bottom: 0; right: 0; border-bottom-width: var(--outline-width); border-right-width: var(--outline-width); }
+@keyframes view-flash { from { opacity: 1; } to { opacity: 0; } }
 
 /* Toast slot: bottom for the novice, just above the mode bar for the expert.
    hud.js sets --toast-offset and --bottom-clearance to stack the controls. */
@@ -475,6 +551,7 @@ button.chip { cursor: pointer; pointer-events: auto; }
 }
 .pin-drawer-head { display: flex; align-items: center; justify-content: space-between; padding-left: 8px; }
 .pin-drawer-head .field-label { margin: 0; }
+.pin-drawer-actions { display: flex; }
 .pin-icon-button { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
 .pin-rows {
   flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
@@ -530,3 +607,20 @@ button.chip { cursor: pointer; pointer-events: auto; }
   cursor: pointer; pointer-events: auto;
 }
 .pin-remove-all:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+
+.icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  box-sizing: border-box; width: var(--icon-target); height: var(--icon-target);
+  min-width: var(--icon-target); min-height: var(--icon-target); padding: 0;
+}
+.icon-button .icon {
+  display: block; flex: none; width: var(--icon-size); height: var(--icon-size);
+}
+.icon-button:focus-visible { outline: 2px solid var(--hud-text); outline-offset: 2px; }
+.icon-button:disabled { opacity: var(--dim); cursor: default; }
+
+/* Grab: put the part back. Right edge at mid-height, like the pin tab (never both at once) */
+.grab-reset {
+  position: absolute; right: var(--edge-right); top: 50%;
+  transform: translateY(-50%);
+}

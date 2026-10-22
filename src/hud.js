@@ -1,4 +1,5 @@
 import { ROOM_IN_USE } from "./net.js";
+import { setIconButton } from "./icons.js";
 import { TOOL_MODES, setMode, onModeChange } from "./expert-tools.js";
 import { unlock, setMuted, isMuted, onMuteChange } from "./audio.js";
 
@@ -200,8 +201,10 @@ export function layoutBottom() {
   if (!toolbar || !toast) return;
   const toolbarSpace = slotSpace(".bottom-bar");
   const toastSpace = slotSpace(".toast-area");
+  const guidanceSpace = slotSpace(".view-guidance");
   hudRoot.style.setProperty("--toast-offset", `${toolbarSpace}px`);
-  hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace}px`);
+  hudRoot.style.setProperty("--guidance-offset", `${toolbarSpace + toastSpace}px`);
+  hudRoot.style.setProperty("--bottom-clearance", `${toolbarSpace + toastSpace + guidanceSpace}px`);
 }
 
 function makeToast(hud) {
@@ -224,9 +227,9 @@ function makeToast(hud) {
 
 // Short message for both roles: one bold line + optional short line.
 // Stays until hideToast(), or for ms milliseconds when given.
-// actions: [{ icon, label, primary, onClick }], square icon buttons on the right
-// (label is for screen readers). timer: a bar draining over ms. onClose runs once,
-// when this toast hides or another replaces it.
+// actions: [{ icon, label, primary, onClick }]. Icon makes a square button (label
+// is for screen readers); otherwise the label is shown. timer: a bar draining
+// over ms. onClose runs once, when this toast hides or another replaces it.
 export function showToast(title, body = "", ms = 0, { actions = [], timer = false, onClose = null } = {}) {
   if (!toast) return;
   endToast();
@@ -236,11 +239,11 @@ export function showToast(title, body = "", ms = 0, { actions = [], timer = fals
   toast.classList.toggle("has-actions", actions.length > 0);
   toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
     const b = el("button", `toast-action${icon ? " is-icon" : ""}${primary ? "" : " is-secondary"}`);
-    b.type = "button";
-    if (icon) {
-      b.innerHTML = icon;
-      b.setAttribute("aria-label", text);
-    } else b.textContent = text;
+    if (icon) setIconButton(b, icon, text);
+    else {
+      b.type = "button";
+      b.textContent = text;
+    }
     b.addEventListener("click", onClick);
     return b;
   }));
