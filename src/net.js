@@ -28,8 +28,11 @@ export function on(type, fn) {
 export function onStatus(fn) { statusHandlers.push(fn); }
 
 // Messages are { t: "type", ...data }. Dropped while not connected.
+// Returns true if the message was sent false if dropped 
 export function send(msg) {
-  if (conn?.open) conn.send(msg);
+  if (!conn?.open) return false;
+  conn.send(msg);
+  return true;
 }
 
 export function getStatus() { return status; }

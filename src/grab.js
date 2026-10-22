@@ -6,10 +6,12 @@ import { showToast, hideToast, showPill } from "./hud.js";
 import { getRole, onStatus } from "./net.js";
 import { RESET_ICON, setIconButton } from "./icons.js";
 import { createPhoneHold, validPose } from "./spatial.js";
+import { play } from "./audio.js";
 
 const SEND_MS = 50;
 const SMOOTHING = 0.3;
 const RAD_PER_PX = 0.008;
+const REMOTE_IDLE_MS = 400;
 const CENTRE = new THREE.Vector3(0, 0.07, 0);
 const round = (n) => Math.round(n * 1e4) / 1e4;
 
@@ -35,6 +37,7 @@ export function initGrab({ send, controls }) {
   let remote = false;
   let session = null;
   let lastSent = 0;
+  let lastRemoteAt = 0;
   let orbitBeforeHold = null;
 
   const canGrab = () => ready && getMode() === "grab"
@@ -68,6 +71,9 @@ export function initGrab({ send, controls }) {
     }
     holding = source;
     hideToast();
+    play("grab", { quiet: true });
+    lastSent = performance.now();
+    sendPivot();
     if (renderer.xr.isPresenting) phoneHold.capture(renderer.xr.getCamera());
     else {
       orbitBeforeHold = controls.enabled;
@@ -85,6 +91,7 @@ export function initGrab({ send, controls }) {
       controls.enabled = !renderer.xr.isPresenting && orbitBeforeHold;
       orbitBeforeHold = null;
     }
+    play("release", { quiet: true });
     sendPivot();
   }
   const cancel = () => endHold(holding);
@@ -171,6 +178,9 @@ export function initGrab({ send, controls }) {
       console.warn("Ignoring invalid grab pose", msg);
       return;
     }
+    const now = performance.now();
+    if (getRole() === "novice" && now - lastRemoteAt > REMOTE_IDLE_MS) play("grab");
+    lastRemoteAt = now;
     targetPos.fromArray(msg.p);
     targetQuat.fromArray(msg.q).normalize();
     remote = true;
@@ -187,8 +197,13 @@ export function initGrab({ send, controls }) {
       const now = performance.now();
       if (now - lastSent >= SEND_MS) { lastSent = now; sendPivot(); }
     } else if (remote && getRole() === "novice") {
-      modelPivot.position.lerp(targetPos, SMOOTHING);
-      modelPivot.quaternion.slerp(targetQuat, SMOOTHING);
+      if (performance.now() - lastRemoteAt > REMOTE_IDLE_MS) {
+        remote = false;
+        play("release");
+      } else {
+        modelPivot.position.lerp(targetPos, SMOOTHING);
+        modelPivot.quaternion.slerp(targetQuat, SMOOTHING);
+      }
     }
   }
 

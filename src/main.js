@@ -6,7 +6,7 @@ import { modelRoot, modelPivot } from "./model.js";
 import { initAR, onSessionStart, onSessionEnd, updateAR, enterAR, arSupported, isPlaced, isTracking } from "./ar.js";
 import { initDebug, updateDebug } from "./debug.js";
 import { connect, disconnect, on, onStatus, send, getRole, getRemoteRole } from "./net.js";
-import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
+import { initHud, setStatus, setPeerRole, setCrosshair, showToast, hideToast } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
@@ -14,6 +14,7 @@ import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, res
 import { initPins } from "./pins.js";
 import { initGrab } from "./grab.js";
 import { createSketch, initSketchInput } from "./sketch.js";
+import { play } from "./audio.js";
 
 const POSE_INTERVAL_MS = 50; // ~20 pose messages a second
 const centreAim = createCentreAim(modelRoot, modelPivot);
@@ -70,13 +71,29 @@ on("hello", (msg) => {
   }
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
+on("help", () => {
+  if (getRole() !== "expert") return;
+  play("gotIt");
+  showToast("Novice is stuck", "Check in with them", 0, {
+    actions: [{ label: "Got it", primary: true, onClick: () => { play("gotIt"); hideToast(); } }],
+  });
+  navigator.vibrate?.([50, 100, 50]); // mimics 2 knocks
+});
 on("pin", pins.addRemote);
 on("unpin", pins.removeRemote);
 on("ack", pins.onAck);
 for (const type of ["stroke", "clear"]) on(type, (msg) => {
   if (getRemoteRole() === "expert") sketch.receive(msg);
 });
-initHud({ connect, disconnect, onEnter: enterAR, arSupported });
+initHud({
+  connect, disconnect, onEnter: enterAR,
+  onHelp: () => {
+    const ok = send({ t: "help" });
+    if (ok) play("gotIt", { quiet: true });
+    return ok;
+  },
+  arSupported,
+});
 const sketchInput = initSketchInput({ sketch, renderer, camera, modelRoot, modelPivot,
   controls, getRole, getMode, onModeChange, isPlaced, isTracking });
 

@@ -129,7 +129,10 @@ export function initAR() {
     domOverlay: { root: hud },
   });
   button.classList.add("ar-button");
-  hud.appendChild(button);
+  const controls = document.createElement("div");
+  controls.className = "ar-controls";
+  controls.appendChild(button);
+  hud.appendChild(controls);
   arButton = button;
 
   // Placement buttons, bottom centre. Taps on them must not also fire an XR select.

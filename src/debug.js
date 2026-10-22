@@ -5,9 +5,10 @@ import { renderer } from "./scene.js";
 import { getStatus, getRemoteRole } from "./net.js";
 
 const UPDATE_MS = 100; // ~10 Hz keeps the numbers readable
+const enabled = new URLSearchParams(location.search).has("debug");
 
 let panel = null;
-let visible = new URLSearchParams(location.search).has("debug");
+let visible = enabled;
 let lastUpdate = 0;
 
 const quat = new THREE.Quaternion();
@@ -19,6 +20,7 @@ function setVisible(on) {
 }
 
 export function initDebug() {
+  if (!enabled) return;
   const hud = document.getElementById("hud");
 
   panel = document.createElement("pre");
@@ -27,13 +29,13 @@ export function initDebug() {
   hud.appendChild(panel);
 
   // Phone toggle. Taps on it must not also fire an XR select.
-  // TODO(#19): remove or hide this button (e.g. only with ?debug) before the demo.
   const button = document.createElement("button");
   button.className = "chip debug-toggle";
   button.textContent = "Dbg";
   button.addEventListener("beforexrselect", (e) => e.preventDefault());
   button.addEventListener("click", () => setVisible(!visible));
   hud.appendChild(button);
+  hud.classList.add("has-debug");
 
   // Desktop toggle
   window.addEventListener("keydown", (e) => {
@@ -43,7 +45,7 @@ export function initDebug() {
 }
 
 export function updateDebug() {
-  if (!visible) return;
+  if (!enabled || !visible) return;
   const now = performance.now();
   if (now - lastUpdate < UPDATE_MS) return;
   lastUpdate = now;

@@ -9,6 +9,7 @@ import { getMode } from "./expert-tools.js";
 import { layoutBottom, showPill } from "./hud.js";
 import { ARROW_ICON, CAMERA_ICON, STEP_ICON, VIBRATE_ICON, setIconButton } from "./icons.js";
 import { alignmentState, validPose, viewpointAlignment } from "./spatial.js";
+import { play } from "./audio.js";
 
 const AXIS_COS = 0.9;
 const NEAR = 0.05;
@@ -63,6 +64,7 @@ function saveViewpoint() {
   }
   savedPose = { id: `${Date.now().toString(36)}-${++sequence}`, ...pose };
   resendViewpoint();
+  play("view", { quiet: true });
   flash();
   showPill(getStatus() === "connected" ? "View sent to novice" : "View saved for when novice connects");
 }
@@ -154,7 +156,10 @@ export function receiveViewpoint(msg) {
   savedGhost.object.position.fromArray(msg.p);
   savedGhost.object.quaternion.fromArray(msg.q).normalize();
   updateToggle();
-  if (!restored) showPill("Expert saved a new view", null, 2000, "expert");
+  if (!restored) {
+    play("view");
+    showPill("Expert saved a new view", null, 2000, "expert");
+  }
 }
 
 // Novice: the expert (re)connected and resends its saved view, if it still has one.
@@ -211,7 +216,10 @@ export function updateViewpoint(time) {
   const nowAligned = alignmentState(aligned, alignment);
   if (nowAligned !== aligned) {
     setAligned(nowAligned);
-    if (nowAligned) buzz();
+    if (nowAligned) {
+      play("aligned", { quiet: true });
+      buzz();
+    }
   }
   // Checked every aligned frame, so a report missed while disconnected goes on reconnect
   if (aligned && reportedId !== savedPose.id && getStatus() === "connected") {
@@ -285,5 +293,7 @@ export function resendViewpoint() {
 }
 
 export function receiveAlignment({ id }) {
-  if (savedPose?.id === id) showPill("Novice reached your view", null, 2000, "novice");
+  if (savedPose?.id !== id) return;
+  play("aligned");
+  showPill("Novice reached your view", null, 2000, "novice");
 }

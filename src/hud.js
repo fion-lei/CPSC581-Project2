@@ -1,6 +1,7 @@
 import { ROOM_IN_USE } from "./net.js";
 import { setIconButton } from "./icons.js";
 import { TOOL_MODES, setMode, onModeChange } from "./expert-tools.js";
+import { unlock, setMuted, isMuted, onMuteChange } from "./audio.js";
 
 const STORE_KEY = "ghostlens.join";
 const TITLES = { expert: "Start a session", novice: "Join a session" };
@@ -39,6 +40,12 @@ let pillDot = null;
 let pillAction = null;
 let pillTimer = 0;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let helpButton = null;
+let helpCooldown = 0;
+const HELP_COOLDOWN_MS = 10000; // cooldown for help so it doesn't spam the expert
+let muteButton = null;
+const SPEAKER_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 5a9 9 0 0 1 0 14"/></svg>`;
+const SPEAKER_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
 const BOTTOM_GAP = 24; // px between stacked bottom controls
 // Start screen status chip and Enter AR button, or null once it's gone
 let screenStatus = null;
@@ -82,6 +89,8 @@ function join(role, code) {
   setMode("view");
   hideToast();
   hidePill();
+  clearTimeout(helpCooldown);
+  helpCooldown = 0;
   if (joined) net.connect(role, code);
   render();
 }
@@ -94,6 +103,8 @@ function render() {
     connectionChip.text.textContent = detail || state;
     connectionChip.c.title = `Connection: ${detail || state}`;
   }
+  renderHelp();
+  renderMute();
   renderTools();
   if (!screenStatus) return;
 
@@ -110,6 +121,62 @@ function render() {
   enterButton.disabled = !ready;
   enterButton.classList.toggle("is-expert", ready && joined.role === "expert");
   enterButton.classList.toggle("is-novice", ready && joined.role === "novice");
+}
+
+// Renders help button for novice -> expert communication
+function renderHelp() {
+  if (!helpButton) return;
+  helpButton.hidden = !inScene || joined?.role !== "novice";
+  helpButton.disabled = !!helpCooldown || state !== "connected";
+  helpButton.textContent = helpCooldown ? "Expert notified" : "Help";
+}
+
+function makeHelpButton(onHelp) {
+  helpButton = el("button", "chip help-chip");
+  helpButton.type = "button";
+  helpButton.setAttribute("aria-live", "polite");
+  helpButton.addEventListener("click", () => {
+    if (!onHelp()) return;
+    helpCooldown = setTimeout(() => {
+      helpCooldown = 0;
+      renderHelp();
+    }, HELP_COOLDOWN_MS);
+    renderHelp();
+  });
+  helpButton.addEventListener("keydown", (e) => e.stopPropagation());
+  helpButton.addEventListener("beforexrselect", (e) => e.preventDefault());
+  // Keep the session chips clear of the help button as its label changes
+  new ResizeObserver(() => {
+    const w = helpButton.offsetWidth;
+    hudRoot.style.setProperty("--help-clearance", `${w ? w + 8 : 0}px`);
+  }).observe(helpButton);
+  return helpButton;
+}
+
+function renderMute() {
+  if (!muteButton) return;
+  muteButton.hidden = !inScene;
+  const on = !isMuted();
+  muteButton.setAttribute("aria-pressed", String(on));
+  muteButton.setAttribute("aria-label", on ? "Sound on" : "Sound muted");
+  muteButton.innerHTML = on ? SPEAKER_ON : SPEAKER_OFF;
+}
+
+function makeMuteButton() {
+  muteButton = el("button", "chip mute-chip");
+  muteButton.type = "button";
+  muteButton.addEventListener("click", () => {
+    unlock().then(() => {
+      setMuted(!isMuted());
+      navigator.vibrate?.(40);
+    });
+  });
+  muteButton.addEventListener("keydown", (e) => e.stopPropagation());
+  muteButton.addEventListener("beforexrselect", (e) => e.preventDefault());
+  onMuteChange(renderMute);
+  renderMute();
+  hudRoot.appendChild(muteButton);
+  return muteButton;
 }
 
 function renderTools() {
@@ -161,9 +228,9 @@ function makeToast(hud) {
 
 // Short message for both roles: one bold line + optional short line.
 // Stays until hideToast(), or for ms milliseconds when given.
-// actions: [{ icon, label, primary, onClick }], square icon buttons on the right
-// (label is for screen readers). timer: a bar draining over ms. onClose runs once,
-// when this toast hides or another replaces it.
+// actions: [{ icon, label, primary, onClick }]. Icon makes a square button (label
+// is for screen readers); otherwise the label is shown. timer: a bar draining
+// over ms. onClose runs once, when this toast hides or another replaces it.
 export function showToast(title, body = "", ms = 0, { actions = [], timer = false, onClose = null } = {}) {
   if (!toast) return;
   endToast();
@@ -172,8 +239,12 @@ export function showToast(title, body = "", ms = 0, { actions = [], timer = fals
   toastBody.hidden = !body;
   toast.classList.toggle("has-actions", actions.length > 0);
   toastActions.replaceChildren(...actions.map(({ icon, label: text, primary, onClick }) => {
-    const b = el("button", `toast-action is-icon${primary ? "" : " is-secondary"}`);
-    setIconButton(b, icon, text);
+    const b = el("button", `toast-action${icon ? " is-icon" : ""}${primary ? "" : " is-secondary"}`);
+    if (icon) setIconButton(b, icon, text);
+    else {
+      b.type = "button";
+      b.textContent = text;
+    }
     b.addEventListener("click", onClick);
     return b;
   }));
@@ -379,6 +450,7 @@ function makeStartScreen(hud, onEnter, arSupported) {
   // Desktop and phones without AR still get in, to the non-AR view
   arSupported.then((ok) => { if (!ok) enter.textContent = "Continue without AR"; });
   enter.addEventListener("click", () => {
+    unlock();
     saveLast(joined.role, joined.code);
     screen.remove();
     screenStatus = enterButton = onRoomInUse = null;
@@ -398,7 +470,7 @@ function makeStartScreen(hud, onEnter, arSupported) {
 
 // Start screen, then onEnter() from its Enter AR button.
 // ?role=expert&room=1234 skips the screen and joins straight away.
-export function initHud({ connect, disconnect, onEnter, arSupported }) {
+export function initHud({ connect, disconnect, onEnter, onHelp, arSupported }) {
   net = { connect, disconnect };
   const hud = document.getElementById("hud");
   hudRoot = hud;
@@ -411,7 +483,8 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
   chip.addEventListener("beforexrselect", (e) => e.preventDefault());
   chip.append(roleChip.c, connectionChip.c);
   chip.hidden = true;
-  hud.appendChild(chip);
+  hud.append(chip, makeHelpButton(onHelp));
+  makeMuteButton();
   // Keep the debug readout below the chips even when they wrap on a phone.
   new ResizeObserver(([entry]) => {
     hud.style.setProperty("--session-status-height", `${entry.contentRect.height}px`);
@@ -428,6 +501,7 @@ export function initHud({ connect, disconnect, onEnter, arSupported }) {
     chip.hidden = false;
     join(role, code);
   } else makeStartScreen(hud, onEnter, arSupported);
+  renderMute();
 }
 
 // Connection state from net.js, shown in its own chip next to the role chip.

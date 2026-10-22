@@ -8,6 +8,7 @@ import { getMode, onModeChange } from "./expert-tools.js";
 import { lineMaterial } from "./ghost.js";
 import { tokenColor, tokenNumber } from "./tokens.js";
 import { showToast, showPill, setHint } from "./hud.js";
+import { play } from "./audio.js";
 import { overhangAngle, fixText, validMark, createPinLabels } from "./pin-labels.js";
 import { createPinDrawer, createPinSheet } from "./pin-drawer.js";
 import { createPinToast } from "./pin-toast.js";
@@ -246,9 +247,14 @@ export function initPins({ expertGhost, send, getRole }) {
     fading.add(pin);
   }
 
-  function land(pin, now) {
+  function land(pin, now, { notify = false } = {}) {
     pin.object.visible = true;
     pin.pulseAt = now;
+    if (isNovice()) {
+      play("pin");
+      navigator.vibrate?.(40);
+      if (notify) toast.show(pin);
+    }
   }
 
   function fadeBeam(now) {
@@ -355,12 +361,12 @@ export function initPins({ expertGhost, send, getRole }) {
           // The draft turns solid with a pulse and gets the next number
           pin.no = ++lastNo;
           pin.pulseAt = performance.now();
-          send(pinMessage(pin));
+          if (send(pinMessage(pin))) play("pin", { quiet: true });
           showPill(`Pin ${pin.no} sent to novice`);
         } else if (changed) {
           // A new fix needs confirming again
           pin.acked = false;
-          send(pinMessage(pin));
+          if (send(pinMessage(pin))) play("pin", { quiet: true });
           showPill(`Pin ${pin.no} updated`);
         }
         renderDrawer();
@@ -409,7 +415,7 @@ export function initPins({ expertGhost, send, getRole }) {
     setHidden(false);
     const pin = addPin(makePin(data.id, data.p, data.n, data.no, data), { pulse: true });
     land(pin, performance.now());
-    send(pinMessage(pin));
+    if (send(pinMessage(pin))) play("pin", { quiet: true });
     renderDrawer();
   }
 
@@ -428,6 +434,8 @@ export function initPins({ expertGhost, send, getRole }) {
     const pin = pins.get(id);
     if (!pin?.no || pin.acked) return;
     pin.acked = true;
+    play("gotIt");
+    navigator.vibrate?.(40);
     if (!drawer.isOpen()) drawer.setDot(true);
     renderDrawer();
   }
@@ -551,7 +559,7 @@ export function initPins({ expertGhost, send, getRole }) {
     if (!pin?.no || pin.acked) return;
     pin.acked = true;
     acks.set(id, markKey(pin));
-    send({ t: "ack", id });
+    if (send({ t: "ack", id })) play("gotIt", { quiet: true });
     renderDrawer();
     toast.close(id);
   }
@@ -571,7 +579,11 @@ export function initPins({ expertGhost, send, getRole }) {
       acks.delete(id);
       if (!r) setHidden(false);
       renderDrawer();
-      if (!r) toast.show(known);
+      if (!r) {
+        play("pin");
+        navigator.vibrate?.(40);
+        toast.show(known);
+      }
       return;
     }
     const pin = addPin(makePin(id, p, n, no, mark), { pulse: !r });
@@ -587,14 +599,13 @@ export function initPins({ expertGhost, send, getRole }) {
     }
     setHidden(false);
     renderDrawer();
-    toast.show(pin);
     const now = performance.now();
     if (!expertGhost.visible) {
-      land(pin, now);
+      land(pin, now, { notify: true });
       return;
     }
     // A newer shot replaces a beam still in flight; that pin lands now
-    if (remotePin && !remotePin.object.visible) land(remotePin, now);
+    if (remotePin && !remotePin.object.visible) land(remotePin, now, { notify: true });
     remotePin = pin;
     pin.landAt = now + REMOTE_BEAM_MS;
     beamState = "remote";
@@ -651,7 +662,7 @@ export function initPins({ expertGhost, send, getRole }) {
       expertGhost.getWorldPosition(beamFrom);
       remotePin.object.getWorldPosition(beamTo);
       if (now >= remotePin.landAt) {
-        land(remotePin, now);
+        land(remotePin, now, { notify: true });
         remotePin = null;
         fadeBeam(now);
       }
