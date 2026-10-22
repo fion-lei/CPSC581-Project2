@@ -10,7 +10,7 @@ import { initHud, setStatus, setPeerRole, setCrosshair } from "./hud.js";
 import { createCentreAim, getMode, onModeChange } from "./expert-tools.js";
 import { getLocalPose } from "./pose.js";
 import { createGhost } from "./ghost.js";
-import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint } from "./viewpoint.js";
+import { initViewpoint, updateViewpoint, receiveViewpoint, receiveAlignment, resendViewpoint, clearViewpoint } from "./viewpoint.js";
 import { initPins } from "./pins.js";
 import { initGrab } from "./grab.js";
 import { createSketch, initSketchInput } from "./sketch.js";
@@ -65,7 +65,10 @@ on("hello", (msg) => {
     grab.resend();
     resendViewpoint();
   }
-  else if (msg.role === "expert") pins.clearRemote();
+  else if (msg.role === "expert") {
+    pins.clearRemote();
+    clearViewpoint();
+  }
 });
 on("pose", (msg) => ghosts[getRole() === "expert" ? "novice" : "expert"].setPose(msg));
 on("pin", pins.addRemote);

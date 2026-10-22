@@ -36,6 +36,7 @@ let savedPose = null;
 let visible = false;
 let aligned = false;
 let reportedId = null; // the expert hears about each saved view once
+let restoreId = null;  // novice: the view held before the expert reconnected
 let onScreen = false;
 let sequence = 0;
 
@@ -138,9 +139,14 @@ export function receiveViewpoint(msg) {
     return;
   }
   if (savedPose?.id === msg.id) return;
+  // The expert resent the view we held before it reconnected: no news, keep the toggle
+  const restored = msg.id === restoreId;
+  restoreId = null;
   savedPose = { id: msg.id, p: [...msg.p], q: [...msg.q] };
-  setAligned(false);
-  visible = true;
+  if (!restored) {
+    setAligned(false);
+    visible = true;
+  }
   if (!savedGhost) {
     savedGhost = createSavedView();
     modelRoot.add(savedGhost.object);
@@ -148,7 +154,15 @@ export function receiveViewpoint(msg) {
   savedGhost.object.position.fromArray(msg.p);
   savedGhost.object.quaternion.fromArray(msg.q).normalize();
   updateToggle();
-  showPill("Expert saved a new view");
+  if (!restored) showPill("Expert saved a new view");
+}
+
+// Novice: the expert (re)connected and resends its saved view, if it still has one.
+// Dropping ours first means a view lost in an expert reload doesn't linger.
+export function clearViewpoint() {
+  if (!savedPose) return;
+  restoreId = savedPose.id;
+  savedPose = null;
 }
 
 function buzz() {
