@@ -370,6 +370,9 @@ button.chip { cursor: pointer; pointer-events: auto; }
   font: 600 15px/1 var(--font-ui); cursor: pointer;
 }
 .pill-action:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pill-dot { flex: none; width: 8px; height: 8px; margin-right: -4px; border-radius: 50%; }
+.pill-dot.is-novice { background: var(--novice); }
+.pill-dot.is-expert { background: var(--expert); }
 .has-pin-drawer .pill { right: calc(var(--edge-right) + var(--pin-drawer-width) + 8px); }
 
 /* ---- Pin labels: flat cards tied to their pin by a leader. pin-labels.js positions them. ---- */
